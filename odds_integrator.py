@@ -34,9 +34,15 @@ class OddsIntegrator:
                 resp.raise_for_status()
                 self.real_odds_cache = resp.json()
                 
+            home_clean = home_team.replace('.', '')
+            away_clean = away_team.replace('.', '')
+            
             for game in self.real_odds_cache:
+                api_home_clean = game['home_team'].replace('.', '')
+                api_away_clean = game['away_team'].replace('.', '')
+                
                 # The Odds API uses full names (e.g., "Toronto Maple Leafs")
-                if home_team in game['home_team'] and away_team in game['away_team']:
+                if home_clean in api_home_clean and away_clean in api_away_clean:
                     if game.get('bookmakers'):
                         markets = game['bookmakers'][0]['markets']
                         
