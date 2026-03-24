@@ -189,8 +189,18 @@ class ProfessionalNHLPredictor:
             ev_away = self.odds.calculate_ev(away_prob, odds_data['away_odds'])
             
             # Poisson Over/Under Calculations
-            home_proj_goals = matchup_features['home_xg_for_pg'].values[0]
-            away_proj_goals = matchup_features['away_xg_for_pg'].values[0]
+            # Phase 7 Upgrade: Opponent-adjusted goal projection
+            # Instead of raw xGF, we blend each team's offense with the opponent's defense
+            # and factor in NHL home ice advantage (~7.5% more goals for home teams)
+            HOME_ADVANTAGE = 1.075
+            
+            home_xgf = matchup_features['home_xg_for_pg'].values[0]
+            away_xga = matchup_features['away_xg_against_pg'].values[0]
+            away_xgf = matchup_features['away_xg_for_pg'].values[0]
+            home_xga = matchup_features['home_xg_against_pg'].values[0]
+            
+            home_proj_goals = ((home_xgf + away_xga) / 2) * HOME_ADVANTAGE
+            away_proj_goals = (away_xgf + home_xga) / 2
             model_projected_total = home_proj_goals + away_proj_goals
             
             prob_over, prob_under = self.calculate_poisson_ou(model_projected_total, odds_data['o_u_line'])
