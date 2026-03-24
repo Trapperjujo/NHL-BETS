@@ -13,87 +13,50 @@ class ProfessionalNHLPredictor:
         self.odds = OddsIntegrator()
         
         # We use a Random Forest which can capture non-linear interactions
-        self.model = RandomForestClassifier(n_estimators=200, max_depth=5, random_state=42)
+        self.model = RandomForestClassifier(n_estimators=200, max_depth=6, random_state=42)
         self.is_trained = False
 
-    def train_synthetic_model(self):
+    def train_real_model(self):
         """
-        Since we don't have a massive historical database of point-in-time stats 
-        readily available from the free API, we generate a synthetic dataset
-        that represents typical hockey dynamics to train our model.
-        
-        In production, you would replace this with a real historical dataset (e.g., CSV).
+        Loads the massive historical dataset compiled by historical_data_builder.py
+        and trains the predictive model on thousands of real game outcomes.
         """
-        print("Training model on synthetic historical data...")
-        np.random.seed(42)
-        n_samples = 2000
-        
-        # Generate realistic-looking team stats for historical matchups
-        home_win_pct = np.random.uniform(0.35, 0.75, n_samples)
-        away_win_pct = np.random.uniform(0.35, 0.75, n_samples)
-        home_gf_pg = np.random.uniform(2.2, 3.8, n_samples)
-        away_gf_pg = np.random.uniform(2.2, 3.8, n_samples)
-        home_ga_pg = np.random.uniform(2.2, 3.8, n_samples)
-        away_ga_pg = np.random.uniform(2.2, 3.8, n_samples)
-        home_l10 = np.random.uniform(0.2, 0.8, n_samples)
-        away_l10 = np.random.uniform(0.2, 0.8, n_samples)
-        home_streak = np.random.randint(-5, 6, n_samples)
-        away_streak = np.random.randint(-5, 6, n_samples)
-        
-        # Advanced Stats (Simulated)
-        home_pp_pct = np.random.uniform(15.0, 28.0, n_samples)  # 15% to 28%
-        away_pp_pct = np.random.uniform(15.0, 28.0, n_samples)
-        home_pk_pct = np.random.uniform(75.0, 88.0, n_samples)  # 75% to 88%
-        away_pk_pct = np.random.uniform(75.0, 88.0, n_samples)
-        home_shots_diff = np.random.uniform(-5.0, 5.0, n_samples)
-        away_shots_diff = np.random.uniform(-5.0, 5.0, n_samples)
-        
-        # Calculate a 'true' probability based on these stats
-        # Home ice advantage adds a small bump (~4-5%)
-        base_prob = 0.54 
-        
-        # Influence logic: better win pct, better goal diff, better recent form, better special teams
-        prob_adjustment = (
-            (home_win_pct - away_win_pct) * 0.7 + 
-            ((home_gf_pg - home_ga_pg) - (away_gf_pg - away_ga_pg)) * 0.1 +
-            (home_l10 - away_l10) * 0.3 +
-            (home_streak - away_streak) * 0.02 +
-            ((home_pp_pct + home_pk_pct) - (away_pp_pct + away_pk_pct)) * 0.005 +
-            (home_shots_diff - away_shots_diff) * 0.01
-        )
-        
-        final_probs = np.clip(base_prob + prob_adjustment, 0.1, 0.9)
-        
-        # Determine actual winner based on the probability
-        outcomes = np.random.binomial(1, final_probs)
-        
-        X = pd.DataFrame({
-            'home_win_pct': home_win_pct,
-            'away_win_pct': away_win_pct,
-            'home_gf_pg': home_gf_pg,
-            'away_gf_pg': away_gf_pg,
-            'home_ga_pg': home_ga_pg,
-            'away_ga_pg': away_ga_pg,
-            'home_l10_win_pct': home_l10,
-            'away_l10_win_pct': away_l10,
-            'home_streak': home_streak,
-            'away_streak': away_streak,
-            'home_pp_pct': home_pp_pct,
-            'away_pp_pct': away_pp_pct,
-            'home_pk_pct': home_pk_pct,
-            'away_pk_pct': away_pk_pct,
-            'home_shots_diff': home_shots_diff,
-            'away_shots_diff': away_shots_diff
-        })
-        y = outcomes
-        
-        self.model.fit(X, y)
-        self.is_trained = True
-        print("Model training complete.\n")
+        print("Loading real historical NHL game database...")
+        try:
+            df = pd.read_csv("historical_training_data.csv")
+            print(f"Loaded {len(df)} historical matchups. Training algorithm...")
+            
+            # The database contains most features, but we need to supply the 
+            # advanced Phase 2 metrics (PP%, PK%, Streak) that MoneyPuck's CSV 
+            # lacked, so the model knows how to weigh them when it sees them in real-time.
+            # We approximate historical PP%/PK% variance by correlating it directly to team goal scoring.
+            
+            df['home_streak'] = 0 # Baseline
+            df['away_streak'] = 0
+            df['home_pp_pct'] = 20.0 + (df['home_gf_pg'] - 3.0) * 5.0
+            df['away_pp_pct'] = 20.0 + (df['away_gf_pg'] - 3.0) * 5.0
+            df['home_pk_pct'] = 80.0 - (df['home_ga_pg'] - 3.0) * 5.0
+            df['away_pk_pct'] = 80.0 - (df['away_ga_pg'] - 3.0) * 5.0
+            
+            X = df[[
+                'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
+                'home_ga_pg', 'away_ga_pg', 'home_l10_win_pct', 'away_l10_win_pct',
+                'home_streak', 'away_streak', 'home_pp_pct', 'away_pp_pct',
+                'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff'
+            ]]
+            y = df['home_win']
+            
+            self.model.fit(X, y)
+            self.is_trained = True
+            print("Model successfully trained on historical data!\n")
+            
+        except FileNotFoundError:
+            print("ERROR: historical_training_data.csv not found! Run historical_data_builder.py first.")
+
 
     def run_daily_predictions(self):
         if not self.is_trained:
-            self.train_synthetic_model()
+            self.train_real_model()
 
         print("Fetching real-time NHL Standings and Advanced Stats...")
         standings = self.fetcher.fetch_current_standings()

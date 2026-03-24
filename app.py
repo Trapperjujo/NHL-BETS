@@ -10,7 +10,7 @@ st.markdown("This application uses a fully trained **Random Forest Machine Learn
 @st.cache_resource
 def load_predictor():
     app = ProfessionalNHLPredictor()
-    app.train_synthetic_model()
+    app.train_real_model()
     return app
 
 predictor = load_predictor()
