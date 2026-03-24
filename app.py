@@ -21,18 +21,19 @@ if st.button("Refresh Live Odds & Predictions"):
     st.cache_data.clear()
 
 @st.cache_data(ttl=3600)  # Cache results for 1 hour to avoid spamming the APIs
-def get_daily_predictions_v2():
+def get_daily_predictions_v3():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v2()
+    results = get_daily_predictions_v3()
     
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
 else:
     for res in results:
         with st.container():
-            st.markdown(f"### {res['matchup']}   |   🎯 Pred. Score: **{res['exact_score']}**")
+            exact_sc = res.get('exact_score', 'Data Loading...')
+            st.markdown(f"### {res['matchup']}   |   🎯 Pred. Score: **{exact_sc}**")
             
             # --- Moneyline UI ---
             st.markdown("#### Moneyline")
