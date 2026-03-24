@@ -26,7 +26,12 @@ def optimize_xgboost():
         'home_streak', 'away_streak', 'home_pp_pct', 'away_pp_pct',
         'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
         'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
-        'home_sv_pct', 'away_sv_pct', 'home_is_b2b', 'away_is_b2b'
+        'home_sv_pct', 'away_sv_pct', 'home_is_b2b', 'away_is_b2b',
+        'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
+        'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
+        'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
+        'home_sva_xg_for', 'away_sva_xg_for', 'home_sva_xg_against', 'away_sva_xg_against',
+        'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken'
     ]]
     y = df['home_win']
 

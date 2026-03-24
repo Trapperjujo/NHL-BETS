@@ -98,7 +98,18 @@ class NHLDataFetcher:
                 stats[team_abbr] = {
                     'xg_for_pg': row['xGoalsFor'] / games,
                     'xg_against_pg': row['xGoalsAgainst'] / games,
-                    'sv_pct': row['savedShotsOnGoalAgainst'] / (row['shotsOnGoalAgainst'] + 0.001)
+                    'sv_pct': row['savedShotsOnGoalAgainst'] / (row['shotsOnGoalAgainst'] + 0.001),
+                    # Phase 6 Ultra-Deep Metrics
+                    'cf_pct': row.get('corsiPercentage', 0.5),
+                    'ff_pct': row.get('fenwickPercentage', 0.5),
+                    'hd_shots_for': row.get('highDangerShotsFor', 5.0) / games,
+                    'hd_shots_against': row.get('highDangerShotsAgainst', 5.0) / games,
+                    'hd_xg_for': row.get('highDangerxGoalsFor', 1.0) / games,
+                    'hd_xg_against': row.get('highDangerxGoalsAgainst', 1.0) / games,
+                    'sva_xg_for': row.get('scoreVenueAdjustedxGoalsFor', 3.0) / games,
+                    'sva_xg_against': row.get('scoreVenueAdjustedxGoalsAgainst', 3.0) / games,
+                    'pen_drawn': row.get('penaltiesAgainst', 3.0) / games,
+                    'pen_taken': row.get('penaltiesFor', 3.0) / games
                 }
             return stats
         except Exception as e:

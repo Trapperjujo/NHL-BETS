@@ -43,7 +43,11 @@ class HistoricalDataBuilder:
             rolling_cols = ['win', 'goalsFor', 'goalsAgainst', 
                             'shotsOnGoalFor', 'shotsOnGoalAgainst', 
                             'faceOffsWonFor', 'faceOffsWonAgainst',
-                            'xGoalsFor', 'xGoalsAgainst', 'savedShotsOnGoalAgainst']
+                            'xGoalsFor', 'xGoalsAgainst', 'savedShotsOnGoalAgainst',
+                            'corsiPercentage', 'fenwickPercentage', 'highDangerShotsFor', 
+                            'highDangerShotsAgainst', 'highDangerxGoalsFor', 'highDangerxGoalsAgainst',
+                            'scoreVenueAdjustedxGoalsFor', 'scoreVenueAdjustedxGoalsAgainst',
+                            'penaltiesFor', 'penaltiesAgainst']
             
             rolling = group[rolling_cols].rolling(window=10, min_periods=1).mean().shift(1)
             
@@ -53,10 +57,22 @@ class HistoricalDataBuilder:
             group['shots_for_pg'] = rolling['shotsOnGoalFor']
             group['shots_against_pg'] = rolling['shotsOnGoalAgainst']
             
-            # New Advanced Metrics (Phase 4)
+            # Phase 4 Advanced Metrics 
             group['xg_for_pg'] = rolling['xGoalsFor']
             group['xg_against_pg'] = rolling['xGoalsAgainst']
             group['sv_pct'] = (rolling['savedShotsOnGoalAgainst'] / (rolling['shotsOnGoalAgainst'] + 0.001)).fillna(0.900)
+            
+            # Phase 6 Ultra-Deep Metrics
+            group['cf_pct'] = rolling['corsiPercentage']
+            group['ff_pct'] = rolling['fenwickPercentage']
+            group['hd_shots_for'] = rolling['highDangerShotsFor']
+            group['hd_shots_against'] = rolling['highDangerShotsAgainst']
+            group['hd_xg_for'] = rolling['highDangerxGoalsFor']
+            group['hd_xg_against'] = rolling['highDangerxGoalsAgainst']
+            group['sva_xg_for'] = rolling['scoreVenueAdjustedxGoalsFor']
+            group['sva_xg_against'] = rolling['scoreVenueAdjustedxGoalsAgainst']
+            group['pen_drawn'] = rolling['penaltiesAgainst']  # Their penaltiesAgainst means penalties drawn by us
+            group['pen_taken'] = rolling['penaltiesFor']      # Their penaltiesFor means penalties taken by us
             
             # Approximate Faceoff %
             f_won = rolling['faceOffsWonFor']
@@ -91,7 +107,17 @@ class HistoricalDataBuilder:
             'xg_for_pg': 3.0,
             'xg_against_pg': 3.0,
             'sv_pct': 0.900,
-            'is_b2b': 0
+            'is_b2b': 0,
+            'cf_pct': 0.5,
+            'ff_pct': 0.5,
+            'hd_shots_for': 5.0,
+            'hd_shots_against': 5.0,
+            'hd_xg_for': 1.0,
+            'hd_xg_against': 1.0,
+            'sva_xg_for': 3.0,
+            'sva_xg_against': 3.0,
+            'pen_drawn': 3.0,
+            'pen_taken': 3.0
         }, inplace=True)
 
         print("Restructuring into Matchup pairs (Home vs Away)...")
@@ -101,7 +127,9 @@ class HistoricalDataBuilder:
         
         # Rename columns to distinguish home and away features
         feature_cols = ['win_pct', 'gf_pg', 'ga_pg', 'l10_win_pct', 'shots_for_pg', 'shots_against_pg', 
-                        'faceoff_pct', 'xg_for_pg', 'xg_against_pg', 'sv_pct', 'is_b2b']
+                        'faceoff_pct', 'xg_for_pg', 'xg_against_pg', 'sv_pct', 'is_b2b',
+                        'cf_pct', 'ff_pct', 'hd_shots_for', 'hd_shots_against', 'hd_xg_for', 'hd_xg_against',
+                        'sva_xg_for', 'sva_xg_against', 'pen_drawn', 'pen_taken']
         
         home_features = home_games[['gameId', 'playerTeam', 'win'] + feature_cols].rename(
             columns={col: f'home_{col}' for col in feature_cols}

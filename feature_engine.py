@@ -71,7 +71,18 @@ class FeatureEngine:
                 'xg_for_pg': mp_data.get('xg_for_pg', 3.0),
                 'xg_against_pg': mp_data.get('xg_against_pg', 3.0),
                 'sv_pct': mp_data.get('sv_pct', 0.900),
-                'is_b2b': is_b2b
+                'is_b2b': is_b2b,
+                # New Phase 6 Ultra-Deep Metrics
+                'cf_pct': mp_data.get('cf_pct', 0.5),
+                'ff_pct': mp_data.get('ff_pct', 0.5),
+                'hd_shots_for': mp_data.get('hd_shots_for', 5.0),
+                'hd_shots_against': mp_data.get('hd_shots_against', 5.0),
+                'hd_xg_for': mp_data.get('hd_xg_for', 1.0),
+                'hd_xg_against': mp_data.get('hd_xg_against', 1.0),
+                'sva_xg_for': mp_data.get('sva_xg_for', 3.0),
+                'sva_xg_against': mp_data.get('sva_xg_against', 3.0),
+                'pen_drawn': mp_data.get('pen_drawn', 3.0),
+                'pen_taken': mp_data.get('pen_taken', 3.0)
             }
             teams.append(team_stats)
             
@@ -117,7 +128,29 @@ class FeatureEngine:
             'home_sv_pct': home_stats['sv_pct'],
             'away_sv_pct': away_stats['sv_pct'],
             'home_is_b2b': home_stats['is_b2b'],
-            'away_is_b2b': away_stats['is_b2b']
+            'away_is_b2b': away_stats['is_b2b'],
+            
+            # Phase 6 Ultra-Deep Metrics
+            'home_cf_pct': home_stats['cf_pct'],
+            'away_cf_pct': away_stats['cf_pct'],
+            'home_ff_pct': home_stats['ff_pct'],
+            'away_ff_pct': away_stats['ff_pct'],
+            'home_hd_shots_for': home_stats['hd_shots_for'],
+            'away_hd_shots_for': away_stats['hd_shots_for'],
+            'home_hd_shots_against': home_stats['hd_shots_against'],
+            'away_hd_shots_against': away_stats['hd_shots_against'],
+            'home_hd_xg_for': home_stats['hd_xg_for'],
+            'away_hd_xg_for': away_stats['hd_xg_for'],
+            'home_hd_xg_against': home_stats['hd_xg_against'],
+            'away_hd_xg_against': away_stats['hd_xg_against'],
+            'home_sva_xg_for': home_stats['sva_xg_for'],
+            'away_sva_xg_for': away_stats['sva_xg_for'],
+            'home_sva_xg_against': home_stats['sva_xg_against'],
+            'away_sva_xg_against': away_stats['sva_xg_against'],
+            'home_pen_drawn': home_stats['pen_drawn'],
+            'away_pen_drawn': away_stats['pen_drawn'],
+            'home_pen_taken': home_stats['pen_taken'],
+            'away_pen_taken': away_stats['pen_taken']
         }
         
         return pd.DataFrame([features])
