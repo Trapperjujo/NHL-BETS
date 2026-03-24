@@ -70,6 +70,45 @@ class ProfessionalNHLPredictor:
         except FileNotFoundError:
             print("ERROR: historical_training_data.csv not found! Run historical_data_builder.py first.")
 
+    def calculate_poisson_ou(self, expected_total_goals, ou_line):
+        """
+        Uses a Poisson distribution to calculate the probability of the game going
+        UNDER or OVER the sportsbook line based on our Model's Expected Total Goals.
+        """
+        import math
+        prob_under = 0.0
+        max_under_goals = math.floor(ou_line)
+        
+        for k in range(max_under_goals + 1):
+            prob = (math.exp(-expected_total_goals) * (expected_total_goals ** k)) / math.factorial(k)
+            prob_under += prob
+            
+        prob_over = 1.0 - prob_under
+        return prob_over, prob_under
+
+    def predict_exact_score(self, home_xg, away_xg):
+        """
+        Calculates the most mathematically probable exact final score.
+        Iterates through 100 possible score combinations using independent Poisson distributions.
+        Excludes ties since NHL games always end with a winner.
+        """
+        import math
+        best_score = (0, 0)
+        max_prob = 0.0
+        
+        for h in range(10):
+            for a in range(10):
+                if h == a:
+                    continue # Games don't end in ties
+                prob_h = (math.exp(-home_xg) * (home_xg ** h)) / math.factorial(h)
+                prob_a = (math.exp(-away_xg) * (away_xg ** a)) / math.factorial(a)
+                prob_score = prob_h * prob_a
+                
+                if prob_score > max_prob:
+                    max_prob = prob_score
+                    best_score = (h, a)
+                    
+        return best_score
 
     def run_daily_predictions(self):
         if not self.is_trained:
@@ -109,8 +148,8 @@ class ProfessionalNHLPredictor:
         results = []
 
         for game in games:
-            home_team = game.get('homeTeam', {})
-            away_team = game.get('awayTeam', {})
+            home_team_data = game.get('homeTeam', {})
+            away_team_data = game.get('awayTeam', {})
             start_time_utc = game.get('startTimeUTC', 'Unknown')
             
             # Format the time (Basic string parsing since we know ISO format)
@@ -120,8 +159,8 @@ class ProfessionalNHLPredictor:
             except:
                 formatted_time = start_time_utc
             
-            home_abbrev = home_team.get('abbrev')
-            away_abbrev = away_team.get('abbrev')
+            home_abbrev = home_team_data.get('abbrev')
+            away_abbrev = away_team_data.get('abbrev')
             
             if not home_abbrev or not away_abbrev:
                 continue
@@ -140,43 +179,77 @@ class ProfessionalNHLPredictor:
             # 2. Mock Live Odds Integration
             home_full_name = team_features.loc[home_abbrev]['team_name'] if home_abbrev in team_features.index else home_abbrev
             away_full_name = team_features.loc[away_abbrev]['team_name'] if away_abbrev in team_features.index else away_abbrev
+            
+            # Fetch odds for moneyline and O/U
             odds_data = self.odds.fetch_live_odds(home_full_name, away_full_name, home_prob)
-            home_odds = odds_data['home_odds']
-            away_odds = odds_data['away_odds']
-            data_source = "(Real API)" if odds_data.get('is_real_data') else "(Mocked)"
             
             # 3. Choose bet based on highest prob, calculate +EV
-            if home_prob > away_prob:
-                predicted_winner = home_abbrev
-                model_confidence = home_prob
-                suggested_odds = home_odds
-                ev = self.odds.calculate_ev(home_prob, home_odds)
-            else:
-                predicted_winner = away_abbrev
-                model_confidence = away_prob
-                suggested_odds = away_odds
-                ev = self.odds.calculate_ev(away_prob, away_odds)
+            # Moneyline EV
+            ev_home = self.odds.calculate_ev(home_prob, odds_data['home_odds'])
+            ev_away = self.odds.calculate_ev(away_prob, odds_data['away_odds'])
+            
+            # Poisson Over/Under Calculations
+            home_proj_goals = matchup_features['home_xg_for_pg'].values[0]
+            away_proj_goals = matchup_features['away_xg_for_pg'].values[0]
+            model_projected_total = home_proj_goals + away_proj_goals
+            
+            prob_over, prob_under = self.calculate_poisson_ou(model_projected_total, odds_data['o_u_line'])
+            
+            ev_over = self.odds.calculate_ev(prob_over, odds_data['over_odds']) if odds_data.get('over_odds') else 0
+            ev_under = self.odds.calculate_ev(prob_under, odds_data['under_odds']) if odds_data.get('under_odds') else 0
+            
+            # Exact Score Prediction
+            exact_home, exact_away = self.predict_exact_score(home_proj_goals, away_proj_goals)
 
             # 4. Display results
             print(f"MATCHUP: {away_abbrev} @ {home_abbrev} [{formatted_time}]")
-            print(f"  Predicted Winner : {predicted_winner} ({model_confidence*100:.1f}%)")
-            print(f"  Live Odds        : {predicted_winner} @ {suggested_odds} {data_source}")
             
-            if ev > 0:
-                print(f"  Analysis         : POSITIVE EV (+${ev:.2f} per $100 bet) [YES] Value Bet!")
+            # Moneyline Analysis
+            predicted_winner_abbrev = home_abbrev if home_prob > away_prob else away_abbrev
+            model_confidence = max(home_prob, away_prob)
+            suggested_odds_ml = odds_data['home_odds'] if home_prob > away_prob else odds_data['away_odds']
+            ev_ml = ev_home if home_prob > away_prob else ev_away
+            
+            print(f"  Predicted Winner : {predicted_winner_abbrev} ({model_confidence*100:.1f}%)")
+            print(f"  Exact Score Pred : {exact_away} - {exact_home}")
+            print(f"  Live ML Odds     : {predicted_winner_abbrev} @ {suggested_odds_ml} {'(Real API)' if odds_data.get('is_real_data') else '(Mocked)'}")
+            if ev_ml > 0:
+                print(f"  ML Analysis      : POSITIVE EV (+${ev_ml:.2f} per $100 bet) [YES] Value Bet!")
             else:
-                print(f"  Analysis         : NEGATIVE EV (${ev:.2f} per $100 bet) [SKIP] Skip")
+                print(f"  ML Analysis      : NEGATIVE EV (${ev_ml:.2f} per $100 bet) [SKIP] Skip")
+
+            # O/U Analysis
+            print(f"  Projected Total  : {model_projected_total:.2f} (O/U Line: {odds_data['o_u_line']})")
+            print(f"  Live O/U Odds    : Over {odds_data['o_u_line']} @ {odds_data['over_odds']} / Under {odds_data['o_u_line']} @ {odds_data['under_odds']}")
+            if ev_over > 0:
+                print(f"  O/U Analysis (O) : POSITIVE EV (+${ev_over:.2f} per $100 bet) [YES] Value Bet!")
+            else:
+                print(f"  O/U Analysis (O) : NEGATIVE EV (${ev_over:.2f} per $100 bet) [SKIP] Skip")
+            if ev_under > 0:
+                print(f"  O/U Analysis (U) : POSITIVE EV (+${ev_under:.2f} per $100 bet) [YES] Value Bet!")
+            else:
+                print(f"  O/U Analysis (U) : NEGATIVE EV (${ev_under:.2f} per $100 bet) [SKIP] Skip")
             print("-" * 60)
             
             results.append({
                 'matchup': f"{away_abbrev} @ {home_abbrev}",
                 'date': formatted_time,
-                'predicted_winner': predicted_winner,
+                # Moneyline
+                'predicted_winner': predicted_winner_abbrev,
                 'confidence': f"{model_confidence*100:.1f}%",
-                'odds': suggested_odds,
-                'ev': ev,
-                'is_value': ev > 0,
-                'data_source': data_source
+                'exact_score': f"{exact_away} - {exact_home}",
+                'odds': suggested_odds_ml,
+                'ev': ev_ml,
+                
+                # Totals (O/U)
+                'o_u_line': odds_data.get('o_u_line', 6.5),
+                'projected_total': round(float(model_projected_total), 2),
+                'over_odds': odds_data.get('over_odds', 1.90),
+                'under_odds': odds_data.get('under_odds', 1.90),
+                'ev_over': ev_over,
+                'ev_under': ev_under,
+                
+                'data_source': "Odds API" if odds_data.get('is_real_data') else "Mocked"
             })
             
         return results

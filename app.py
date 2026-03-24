@@ -30,35 +30,53 @@ with st.spinner("Fetching live NHL stats, training models, and pulling odds...")
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
 else:
-    # Convert to DataFrame for a nice summary table
-    df = pd.DataFrame(results)
-    
-    # Filter for +EV only
-    st.subheader("✅ High Value Bets (+EV)")
-    value_bets = df[df['is_value'] == True]
-    
-    if len(value_bets) > 0:
-        for idx, row in value_bets.iterrows():
-            st.success(f"**{row['matchup']}**: Bet on **{row['predicted_winner']}** @ {row['odds']} (Confidence: {row['confidence']}) — **EV: +${row['ev']:.2f}** per $100")
-    else:
-        st.warning("No mathematically profitable bets found today based on current odds.")
-        
-    st.subheader("📊 All Game Analysis")
-    # Clean up df for display
-    display_df = df[['matchup', 'date', 'predicted_winner', 'confidence', 'odds', 'ev', 'data_source']].copy()
-    display_df.columns = ['Matchup', 'Date/Time (UTC)', 'Predicted Winner', 'Model Confidence', 'Decimal Odds', 'Expected Value ($ per 100)', 'Odds Source']
-    
-    # Apply color styling
-    def color_ev(val):
-        color = 'lightgreen' if val > 0 else 'lightcoral'
-        return f'background-color: {color}'
-        
-    st.dataframe(display_df.style.applymap(color_ev, subset=['Expected Value ($ per 100)']), use_container_width=True)
+    for res in results:
+        with st.container():
+            st.markdown(f"### {res['matchup']}   |   🎯 Pred. Score: **{res['exact_score']}**")
+            
+            # --- Moneyline UI ---
+            st.markdown("#### Moneyline")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Predicted Winner", res['predicted_winner'])
+            with col2:
+                st.metric("Model Confidence", res['confidence'])
+            with col3:
+                st.metric("Live ML Odds", res['odds'])
+            
+            ev_ml = res['ev']
+            if ev_ml > 0:
+                st.success(f"📈 **Moneyline Edge Detected!** Expected Value: +${ev_ml:.2f} per $100 bet")
+            else:
+                st.warning(f"📉 **No ML Edge.** Expected Value: ${ev_ml:.2f} per $100 bet. Skip.")
+                
+            # --- Over/Under Totals UI ---
+            st.markdown("#### Over/Under (Totals)")
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                st.metric("Vegas O/U Line", f"{res['o_u_line']}")
+            with col5:
+                st.metric("Proj. Total Goals", f"{res['projected_total']}")
+            with col6:
+                st.metric("Live O/U Odds", f"O {res['over_odds']} // U {res['under_odds']}")
+            
+            ev_over = res['ev_over']
+            ev_under = res['ev_under']
+            if ev_over > 0:
+                st.success(f"📈 **OVER Edge Detected!** Expected Value: +${ev_over:.2f} per $100 bet")
+            elif ev_under > 0:
+                st.success(f"📈 **UNDER Edge Detected!** Expected Value: +${ev_under:.2f} per $100 bet")
+            else:
+                st.warning(f"📉 **No O/U Edge.** (Over EV: ${ev_over:.2f} | Under EV: ${ev_under:.2f}). Skip.")
+            
+            st.caption(f"Data Source: {res.get('data_source', 'Odds API')}")
+            st.divider()
 
 st.sidebar.title("About the Model")
 st.sidebar.info("""
 **Architecture**:
-- **Data**: Live NHL standings & advanced metrics (PP%, PK%)
-- **Machine Learning**: RandomForestClassifier trained on simulated momentum indicators
-- **Odds**: Connected to The Odds API via ODs_API_KEY env variable, or mathematically mocked.
+- **Data**: Live NHL standings & ultra-deep MoneyPuck analytics (Corsi, Fenwick, High-Danger xG)
+- **Machine Learning**: XGBoost hyperparameter-tuned on 6,700 real-world games
+- **Prediction**: Moneyline value (+EV), Exact Score Simulator, and Poisson Over/Under Distribution
+- **Odds**: Connected to The Odds API via API key, or mathematically mocked.
 """)

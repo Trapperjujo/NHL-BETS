@@ -26,7 +26,7 @@ class OddsIntegrator:
     def _fetch_real_odds(self, api_key, home_team, away_team):
         try:
             if not self.real_odds_cache:
-                url = f"https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?regions=us&markets=h2h&oddsFormat=decimal&apiKey={api_key}"
+                url = f"https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?regions=us&markets=h2h,totals&oddsFormat=decimal&apiKey={api_key}"
                 resp = requests.get(url)
                 resp.raise_for_status()
                 self.real_odds_cache = resp.json()
@@ -34,14 +34,31 @@ class OddsIntegrator:
             for game in self.real_odds_cache:
                 # The Odds API uses full names (e.g., "Toronto Maple Leafs")
                 if home_team in game['home_team'] and away_team in game['away_team']:
-                    # Extract the first bookmaker's odds (e.g. DraftKings)
                     if game.get('bookmakers'):
-                        markets = game['bookmakers'][0]['markets'][0]['outcomes']
-                        home_odds = next(o['price'] for o in markets if o['name'] == game['home_team'])
-                        away_odds = next(o['price'] for o in markets if o['name'] == game['away_team'])
+                        markets = game['bookmakers'][0]['markets']
+                        
+                        home_odds, away_odds = None, None
+                        over_odds, under_odds, o_u_line = None, None, 6.5
+                        
+                        for m in markets:
+                            if m['key'] == 'h2h':
+                                home_odds = next((o['price'] for o in m['outcomes'] if o['name'] == game['home_team']), None)
+                                away_odds = next((o['price'] for o in m['outcomes'] if o['name'] == game['away_team']), None)
+                            elif m['key'] == 'totals':
+                                # Totals outcomes are named 'Over' and 'Under'. They also provide 'point' (the line)
+                                over_outcome = next((o for o in m['outcomes'] if o['name'] == 'Over'), None)
+                                under_outcome = next((o for o in m['outcomes'] if o['name'] == 'Under'), None)
+                                if over_outcome and under_outcome:
+                                    over_odds = over_outcome['price']
+                                    under_odds = under_outcome['price']
+                                    o_u_line = over_outcome.get('point', 6.5)
+                        
                         return {
                             'home_odds': home_odds,
                             'away_odds': away_odds,
+                            'over_odds': over_odds,
+                            'under_odds': under_odds,
+                            'o_u_line': o_u_line,
                             'is_real_data': True
                         }
         except Exception as e:
@@ -69,9 +86,17 @@ class OddsIntegrator:
         home_odds = round(1.0 / book_implied_home, 2)
         away_odds = round(1.0 / book_implied_away, 2)
         
+        # Mock Totals (O/U) roughly centered around 6.5 goals in the NHL
+        o_u_line = random.choice([5.5, 6.0, 6.5])
+        over_odds = round(random.uniform(1.85, 2.05), 2)
+        under_odds = round(random.uniform(1.85, 2.05), 2)
+        
         return {
             'home_odds': min(self.max_odds, max(self.min_odds, home_odds)),
             'away_odds': min(self.max_odds, max(self.min_odds, away_odds)),
+            'over_odds': over_odds,
+            'under_odds': under_odds,
+            'o_u_line': o_u_line,
             'is_real_data': False
         }
 
