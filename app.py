@@ -22,11 +22,11 @@ if st.button("🔄 Refresh Live Odds & Predictions"):
     st.rerun()
 
 @st.cache_data(ttl=3600)
-def get_daily_predictions_v3():
+def get_daily_predictions_v4():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v3()
+    results = get_daily_predictions_v4()
 
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
