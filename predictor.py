@@ -32,7 +32,7 @@ class ProfessionalNHLPredictor:
         and trains the predictive model on thousands of real game outcomes.
         """
         import joblib, os
-        model_path = "nhl_model.pkl"
+        model_path = "nhl_model_v2.pkl"
         
         # Fast path: load a previously saved model from disk
         if os.path.exists(model_path):
