@@ -216,10 +216,35 @@ class ProfessionalNHLPredictor:
             home_rest = matchup_features['home_rest_days'].values[0] if 'home_rest_days' in matchup_features.columns else 2
             away_rest = matchup_features['away_rest_days'].values[0] if 'away_rest_days' in matchup_features.columns else 2
             
-            X_live = matchup_features.drop(columns=[
-                'home_goalie', 'away_goalie', 'home_injury_penalty', 'away_injury_penalty', 
-                'home_rest_days', 'away_rest_days'
-            ], errors='ignore')
+            # CRITICAL FIX: Ensure X_live exactly matches the model's expected features
+            # Define the exact 40 features used in training order
+            EXPECTED_FEATURES = [
+                'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
+                'home_ga_pg', 'away_ga_pg', 'home_pp_pct', 'away_pp_pct',
+                'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
+                'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
+                'home_sv_pct', 'away_sv_pct',
+                'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
+                'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
+                'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
+                'home_sva_xg_for', 'away_sva_xg_for', 'home_sva_xg_against', 'away_sva_xg_against',
+                'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken',
+                'home_elo', 'away_elo'
+            ]
+            
+            # If the loaded model has feature names, align to them (handles stale models gracefully)
+            model_features = None
+            if hasattr(self.model, 'estimator') and hasattr(self.model.estimator, 'feature_names_in_'):
+                model_features = self.model.estimator.feature_names_in_
+            elif hasattr(self.model, 'feature_names_in_'):
+                model_features = self.model.feature_names_in_
+                
+            if model_features is not None:
+                # Reindex with fill_value=0 to pad missing columns if using a stale model
+                X_live = matchup_features.reindex(columns=model_features, fill_value=0)
+            else:
+                # Fallback to the hardcoded list
+                X_live = matchup_features.reindex(columns=EXPECTED_FEATURES, fill_value=0)
 
             # 1. Predict Outcome
             prob = self.model.predict_proba(X_live)[0]
