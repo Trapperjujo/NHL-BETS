@@ -13,11 +13,14 @@ class ProfessionalNHLPredictor:
         self.engine = FeatureEngine()
         self.odds = OddsIntegrator()
         
-        # Phase 4 Upgrade: XGBoost for sharper probabilistic outputs
+        # Phase 5 mathematically optimal XGBoost parameters (from exhaustive Grid Search)
         self.model = XGBClassifier(
-            n_estimators=300, 
-            max_depth=5, 
-            learning_rate=0.05,
+            colsample_bytree=0.8,
+            learning_rate=0.01,
+            max_depth=3,
+            min_child_weight=5,
+            n_estimators=200,
+            subsample=0.8,
             eval_metric="logloss",
             random_state=42
         )
