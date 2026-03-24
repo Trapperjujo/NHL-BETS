@@ -70,7 +70,7 @@ class NHLDataFetcher:
             # 2. Fetch MoneyPuck Individual Goalie Stats
             headers = {'User-Agent': 'Mozilla/5.0'}
             # Note: Hardcoding '2024' or fetching 'current' based on season logic. 2024=2024-25 season.
-            url = f"{self.moneypuck_base}/seasonSummary/2024/regular/goalies.csv" 
+            url = f"{self.moneypuck_base}/seasonSummary/2025/regular/goalies.csv" 
             mp_resp = requests.get(url, headers=headers)
             mp_resp.raise_for_status()
             
@@ -88,10 +88,10 @@ class NHLDataFetcher:
                 
                 if not goalie_row.empty:
                     # If multiple result (e.g. Sebastian Aho), just take the one with most shots faced
-                    goalie_row = goalie_row.sort_values(by='shotsOnGoal', ascending=False).iloc[0]
+                    goalie_row = goalie_row.sort_values(by='ongoal', ascending=False).iloc[0]
                     
-                    sv_pct = goalie_row['savedShotsOnGoal'] / (goalie_row['shotsOnGoal'] + 0.001)
-                    gsax = goalie_row['savedChancesAboveExpected']
+                    sv_pct = (goalie_row['ongoal'] - goalie_row['goals']) / (goalie_row['ongoal'] + 0.001)
+                    gsax = goalie_row['xGoals'] - goalie_row['goals']
                     
                     goalie_data[team] = {
                         'name': goalie_row['name'],
@@ -126,7 +126,7 @@ class NHLDataFetcher:
             # 1. Download MoneyPuck Skater Data (all skaters, season aggregate)
             headers = {'User-Agent': 'Mozilla/5.0'}
             # Note: Hardcoding '2024' or fetching 'current' based on season logic. 2024=2024-25 season.
-            url = f"{self.moneypuck_base}/seasonSummary/2024/regular/skaters.csv" 
+            url = f"{self.moneypuck_base}/seasonSummary/2025/regular/skaters.csv" 
             mp_resp = requests.get(url, headers=headers)
             mp_resp.raise_for_status()
             
@@ -281,7 +281,7 @@ class NHLDataFetcher:
         """Fetches advanced xG and SV% metrics for all teams from MoneyPuck's daily CSV."""
         import io
         import pandas as pd
-        url = "https://moneypuck.com/moneypuck/playerData/seasonSummary/2024/regular/teams.csv"
+        url = "https://moneypuck.com/moneypuck/playerData/seasonSummary/2025/regular/teams.csv"
         headers = {'User-Agent': 'Mozilla/5.0'}
         try:
             r = requests.get(url, headers=headers)
