@@ -134,6 +134,9 @@ class ProfessionalNHLPredictor:
         tired_teams = self.fetcher.fetch_tired_teams()
         mp_stats = self.fetcher.fetch_moneypuck_stats()
         
+        print("Scraping Confirmed Starting Goalies (Phase 9)...")
+        starting_goalies = self.fetcher.fetch_starting_goalies()
+        
         if not schedule:
             print("No games scheduled today or data unavailable.")
             return []
@@ -142,7 +145,8 @@ class ProfessionalNHLPredictor:
             standings_data=standings, 
             advanced_stats_data=advanced_stats,
             moneypuck_stats=mp_stats,
-            tired_teams=tired_teams
+            tired_teams=tired_teams,
+            starting_goalies=starting_goalies
         )
         print(f"Engineered features for {len(team_features)} teams.\n")
 
@@ -182,8 +186,14 @@ class ProfessionalNHLPredictor:
                 print(f"Skipping {away_abbrev} @ {home_abbrev}: Missing team stats.")
                 continue
 
+            # Extract metadata (strings) before pushing to XGBoost matrix
+            home_goalie = matchup_features['home_goalie'].values[0] if 'home_goalie' in matchup_features.columns else 'Team Avg'
+            away_goalie = matchup_features['away_goalie'].values[0] if 'away_goalie' in matchup_features.columns else 'Team Avg'
+            
+            X_live = matchup_features.drop(columns=['home_goalie', 'away_goalie'], errors='ignore')
+
             # 1. Predict Outcome
-            prob = self.model.predict_proba(matchup_features)[0]
+            prob = self.model.predict_proba(X_live)[0]
             home_prob = prob[1]
             away_prob = prob[0]
             
@@ -231,6 +241,7 @@ class ProfessionalNHLPredictor:
             suggested_odds_ml = odds_data['home_odds'] if home_prob > away_prob else odds_data['away_odds']
             ev_ml = ev_home if home_prob > away_prob else ev_away
             
+            print(f"  Goalie Matchup   : {away_goalie} vs {home_goalie}")
             print(f"  Predicted Winner : {predicted_winner_abbrev} ({model_confidence*100:.1f}%)")
             print(f"  Exact Score Pred : {exact_away} - {exact_home}")
             print(f"  Live ML Odds     : {predicted_winner_abbrev} @ {suggested_odds_ml} {'(Real API)' if odds_data.get('is_real_data') else '(Mocked)'}")
@@ -269,6 +280,10 @@ class ProfessionalNHLPredictor:
                 'under_odds': odds_data.get('under_odds', 1.90),
                 'ev_over': ev_over,
                 'ev_under': ev_under,
+                
+                # Phase 9 Goalies
+                'home_goalie': home_goalie,
+                'away_goalie': away_goalie,
                 
                 'data_source': "Odds API" if odds_data.get('is_real_data') else "Mocked"
             })

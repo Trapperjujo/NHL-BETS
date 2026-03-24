@@ -4,7 +4,7 @@ class FeatureEngine:
     def __init__(self):
         pass
         
-    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, tired_teams=None):
+    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, tired_teams=None, starting_goalies=None):
         """
         Converts the raw API standings JSON, advanced stats JSON, and MP stats 
         into a merged pandas DataFrame.
@@ -14,6 +14,7 @@ class FeatureEngine:
         
         moneypuck_stats = moneypuck_stats or {}
         tired_teams = tired_teams or []
+        starting_goalies = starting_goalies or {}
 
         # Create a dict from advanced stats using teamFullName as the key
         adv_stats_dict = {
@@ -70,7 +71,13 @@ class FeatureEngine:
                 # New Phase 4 Deep Metrics
                 'xg_for_pg': mp_data.get('xg_for_pg', 3.0),
                 'xg_against_pg': mp_data.get('xg_against_pg', 3.0),
-                'sv_pct': mp_data.get('sv_pct', 0.900),
+                
+                # Phase 9: Individual Goalie Override
+                # If we scraped a confirmed starter, use their specific SV% instead of the team's rolling average.
+                # This explicitly punishes a team resting their starter, or rewards an elite Vezina goalie.
+                'sv_pct': starting_goalies.get(team_id, {}).get('sv_pct') or mp_data.get('sv_pct', 0.900),
+                'starting_goalie': starting_goalies.get(team_id, {}).get('name', 'Team Average'),
+                
                 'is_b2b': is_b2b,
                 # New Phase 6 Ultra-Deep Metrics
                 'cf_pct': mp_data.get('cf_pct', 0.5),
@@ -157,7 +164,11 @@ class FeatureEngine:
             
             # Phase 8: Elo Power Ratings
             'home_elo': home_stats['elo'],
-            'away_elo': away_stats['elo']
+            'away_elo': away_stats['elo'],
+            
+            # Phase 9: Individual Goalie Context (for the UI)
+            'home_goalie': home_stats['starting_goalie'],
+            'away_goalie': away_stats['starting_goalie']
         }
         
         return pd.DataFrame([features])

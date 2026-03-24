@@ -23,11 +23,11 @@ if st.button("🔄 Refresh Live Odds & Predictions"):
     st.rerun()
 
 @st.cache_data(ttl=3600)
-def get_daily_predictions_v5():
+def get_daily_predictions_v6():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v5()
+    results = get_daily_predictions_v6()
 
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
@@ -55,7 +55,7 @@ else:
             exact_sc = res.get('exact_score', 'N/A')
             src_badge = "🟢 Live API" if res.get('data_source') == 'Odds API' else "🟡 Mocked"
             st.markdown(f"### {res['matchup']}   |   🎯 Pred. Score: **{exact_sc}**   {src_badge}")
-            st.caption(f"📅 {res.get('date', '')}")
+            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} (Away) vs {res.get('home_goalie', 'Team Avg')} (Home)")
 
             # Moneyline
             st.markdown("##### Moneyline")
@@ -100,6 +100,7 @@ else:
     for res in results:
         table_rows.append({
             "Matchup": res['matchup'],
+            "Goalies": f"{res.get('away_goalie', 'Avg')} @ {res.get('home_goalie', 'Avg')}",
             "Pred. Winner": res['predicted_winner'],
             "Confidence": res['confidence'],
             "Exact Score": res.get('exact_score', 'N/A'),

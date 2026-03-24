@@ -4,8 +4,22 @@ import json
 
 class NHLDataFetcher:
     def __init__(self):
-        self.standings_url = "https://api-web.nhle.com/v1/standings/now"
-        self.schedule_url = "https://api-web.nhle.com/v1/schedule/now"
+        self.base_url = "https://api-web.nhle.com/v1"
+        self.moneypuck_base = "https://moneypuck.com/moneypuck/playerData"
+        self.espn_scoreboard_url = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
+        
+        # ESPN uses slightly different team abbreviations than NHL.com
+        self.espn_to_nhl_map = {
+            'TB': 'TBL', 'SJ': 'SJS', 'LA': 'LAK', 'NJ': 'NJD', 'WSH': 'WSH',
+            'BOS': 'BOS', 'TOR': 'TOR', 'MTL': 'MTL', 'CAR': 'CAR', 'DET': 'DET',
+            'OTT': 'OTT', 'FLA': 'FLA', 'SEA': 'SEA', 'NYI': 'NYI', 'CHI': 'CHI',
+            'PHI': 'PHI', 'CBJ': 'CBJ', 'PIT': 'PIT', 'COL': 'COL', 'MIN': 'MIN',
+            'STL': 'STL', 'NSH': 'NSH', 'DAL': 'DAL', 'WPG': 'WPG', 'VGK': 'VGK',
+            'CGY': 'CGY', 'UTA': 'UTA', 'EDM': 'EDM', 'VAN': 'VAN', 'ANA': 'ANA',
+            'NYR': 'NYR', 'BUF': 'BUF'
+        }
+        self.standings_url = f"{self.base_url}/standings/now"
+        self.schedule_url = f"{self.base_url}/schedule/now"
         self.stats_url = "https://api.nhle.com/stats/rest/en/team/summary"
 
     def fetch_advanced_stats(self):
@@ -16,8 +30,85 @@ class NHLDataFetcher:
             data = response.json()
             return data.get('data', [])
         except requests.RequestException as e:
-            print(f"Error fetching advanced stats: {e}")
-            return []
+            print(f"Failed to fetch MoneyPuck 5v5 deep metrics: {e}")
+            return None
+
+    def fetch_starting_goalies(self):
+        """
+        Phase 9 Upgrade: Individual Player Tracking
+        - Hits ESPN API to identify confirmed/expected starting goalies tonight.
+        - Hits MoneyPuck to pull individual goalie SV% and GSAx (Goals Saved Above Expected).
+        Returns a dict: { 'TOR': {'name': 'Anthony Stolarz', 'sv_pct': 0.925, 'gsax': 15.2} }
+        """
+        import io
+        import pandas as pd
+        goalie_data = {}
+        
+        try:
+            # 1. Fetch Tonight's Starters from ESPN
+            espn_resp = requests.get(self.espn_scoreboard_url)
+            espn_resp.raise_for_status()
+            events = espn_resp.json().get('events', [])
+            
+            starters_by_team = {}
+            for event in events:
+                for comp in event['competitions'][0]['competitors']:
+                    team_abbrev_espn = comp['team']['abbreviation']
+                    team_abbrev_nhl = self.espn_to_nhl_map.get(team_abbrev_espn, team_abbrev_espn)
+                    
+                    probables = comp.get('probables', [])
+                    if probables:
+                        # Grab the first probable goalie
+                        goalie_name = probables[0]['athlete']['displayName']
+                        status = probables[0]['status']['name'] # 'Confirmed' or 'Expected'
+                        starters_by_team[team_abbrev_nhl] = {'name': goalie_name, 'status': status}
+            
+            if not starters_by_team:
+                print("ESPN returned no probable goalies for tonight. Falling back to team averages.")
+                return {}
+                
+            # 2. Fetch MoneyPuck Individual Goalie Stats
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            # Note: Hardcoding '2024' or fetching 'current' based on season logic. 2024=2024-25 season.
+            url = f"{self.moneypuck_base}/seasonSummary/2024/regular/goalies.csv" 
+            mp_resp = requests.get(url, headers=headers)
+            mp_resp.raise_for_status()
+            
+            df = pd.read_csv(io.StringIO(mp_resp.text))
+            
+            # Filter to 'all' situations
+            df = df[df['situation'] == 'all']
+            
+            # Map ESPN starer names to MoneyPuck stat lines
+            for team, starter in starters_by_team.items():
+                name = starter['name']
+                # Search MoneyPuck CSV for this goalie
+                # Handles slight naming variations (e.g., 'Sam Montembeault' vs 'Samuel Montembeault')
+                goalie_row = df[df['name'].str.contains(name.split()[-1], case=False, na=False)]
+                
+                if not goalie_row.empty:
+                    # If multiple result (e.g. Sebastian Aho), just take the one with most shots faced
+                    goalie_row = goalie_row.sort_values(by='shotsOnGoal', ascending=False).iloc[0]
+                    
+                    sv_pct = goalie_row['savedShotsOnGoal'] / (goalie_row['shotsOnGoal'] + 0.001)
+                    gsax = goalie_row['savedChancesAboveExpected']
+                    
+                    goalie_data[team] = {
+                        'name': goalie_row['name'],
+                        'status': starter['status'],
+                        'sv_pct': sv_pct,
+                        'gsax': gsax
+                    }
+                else:
+                    # Goalie not found (e.g., AHL call up)
+                    goalie_data[team] = {'name': name, 'status': starter['status'], 'sv_pct': None, 'gsax': None}
+                    
+            print(f"Successfully scraped individual analytics for {len(goalie_data)} starting goalies.")
+            return goalie_data
+            
+        except Exception as e:
+            print(f"Failed to fetch individual starting goalie data: {e}")
+            return {}
 
     def fetch_current_standings(self):
         """Fetch real-time regular season standings and team stats."""
