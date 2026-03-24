@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime
-from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 
 from data_fetcher import NHLDataFetcher
 from feature_engine import FeatureEngine
@@ -13,8 +13,14 @@ class ProfessionalNHLPredictor:
         self.engine = FeatureEngine()
         self.odds = OddsIntegrator()
         
-        # We use a Random Forest which can capture non-linear interactions
-        self.model = RandomForestClassifier(n_estimators=200, max_depth=6, random_state=42)
+        # Phase 4 Upgrade: XGBoost for sharper probabilistic outputs
+        self.model = XGBClassifier(
+            n_estimators=300, 
+            max_depth=5, 
+            learning_rate=0.05,
+            eval_metric="logloss",
+            random_state=42
+        )
         self.is_trained = False
 
     def train_real_model(self):
@@ -43,7 +49,9 @@ class ProfessionalNHLPredictor:
                 'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
                 'home_ga_pg', 'away_ga_pg', 'home_l10_win_pct', 'away_l10_win_pct',
                 'home_streak', 'away_streak', 'home_pp_pct', 'away_pp_pct',
-                'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff'
+                'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
+                'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
+                'home_sv_pct', 'away_sv_pct', 'home_is_b2b', 'away_is_b2b'
             ]]
             y = df['home_win']
             
@@ -62,16 +70,26 @@ class ProfessionalNHLPredictor:
         print("Fetching real-time NHL Standings and Advanced Stats...")
         standings = self.fetcher.fetch_current_standings()
         advanced_stats = self.fetcher.fetch_advanced_stats()
+        schedule = self.fetcher.fetch_todays_schedule()
         
-        if not standings:
-            print("Failed to fetch standings.")
-            return
+        print("Fetching real-time Extreme Deep Metrics (Fatigue, xG, SV%)...")
+        tired_teams = self.fetcher.fetch_tired_teams()
+        mp_stats = self.fetcher.fetch_moneypuck_stats()
+        
+        if not schedule:
+            print("No games scheduled today or data unavailable.")
+            return []
 
-        team_features = self.engine.build_team_features(standings, advanced_stats)
+        team_features = self.engine.build_team_features(
+            standings_data=standings, 
+            advanced_stats_data=advanced_stats,
+            moneypuck_stats=mp_stats,
+            tired_teams=tired_teams
+        )
         print(f"Engineered features for {len(team_features)} teams.\n")
 
         print("Fetching today's schedule...")
-        games = self.fetcher.fetch_todays_schedule()
+        games = schedule # Use the schedule fetched earlier
         
         if not games:
             print("No games scheduled.")

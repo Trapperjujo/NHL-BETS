@@ -56,3 +56,51 @@ class NHLDataFetcher:
         except requests.RequestException as e:
             print(f"Error fetching schedule: {e}")
             return []
+
+    def fetch_tired_teams(self):
+        """Returns a list of team abbreviations that played yesterday (Back-to-Back)."""
+        yesterday_str = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        url = f"https://api-web.nhle.com/v1/schedule/{yesterday_str}"
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            tired_teams = []
+            for day in data.get('gameWeek', []):
+                if day.get('date') == yesterday_str:
+                    for game in day.get('games', []):
+                        tired_teams.append(game.get('homeTeam', {}).get('abbrev'))
+                        tired_teams.append(game.get('awayTeam', {}).get('abbrev'))
+            return tired_teams
+        except requests.RequestException:
+            return []
+
+    def fetch_moneypuck_stats(self):
+        """Fetches advanced xG and SV% metrics for all teams from MoneyPuck's daily CSV."""
+        import io
+        import pandas as pd
+        url = "https://moneypuck.com/moneypuck/playerData/seasonSummary/2024/regular/teams.csv"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(url, headers=headers)
+            r.raise_for_status()
+            df = pd.read_csv(io.StringIO(r.text))
+            
+            # Filter for 'all' situations
+            df = df[df['situation'] == 'all']
+            
+            stats = {}
+            for _, row in df.iterrows():
+                team_abbr = row['team']
+                games = row['games_played']
+                if games == 0: continue
+                
+                stats[team_abbr] = {
+                    'xg_for_pg': row['xGoalsFor'] / games,
+                    'xg_against_pg': row['xGoalsAgainst'] / games,
+                    'sv_pct': row['savedShotsOnGoalAgainst'] / (row['shotsOnGoalAgainst'] + 0.001)
+                }
+            return stats
+        except Exception as e:
+            print(f"Error fetching live MoneyPuck stats: {e}")
+            return {}

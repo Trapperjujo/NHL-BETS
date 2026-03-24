@@ -4,13 +4,16 @@ class FeatureEngine:
     def __init__(self):
         pass
         
-    def build_team_features(self, standings_data, advanced_stats_data):
+    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, tired_teams=None):
         """
-        Converts the raw API standings JSON and advanced stats JSON 
+        Converts the raw API standings JSON, advanced stats JSON, and MP stats 
         into a merged pandas DataFrame.
         """
         if not standings_data:
             return pd.DataFrame()
+        
+        moneypuck_stats = moneypuck_stats or {}
+        tired_teams = tired_teams or []
 
         # Create a dict from advanced stats using teamFullName as the key
         adv_stats_dict = {
@@ -44,9 +47,13 @@ class FeatureEngine:
                         adv_data = val
                         break
 
+            team_id = team.get('teamAbbrev', {}).get('default', 'UNK')
+            mp_data = moneypuck_stats.get(team_id, {})
+            is_b2b = 1 if team_id in tired_teams else 0
+
             # Feature Engineering Merge
             team_stats = {
-                'team_id': team.get('teamAbbrev', {}).get('default', 'UNK'),
+                'team_id': team_id,
                 'team_name': full_name,
                 'win_pct': wins / games_played if games_played > 0 else 0,
                 'gf_pg': goals_for / games_played if games_played > 0 else 0,
@@ -59,7 +66,12 @@ class FeatureEngine:
                 'pk_pct': adv_data.get('penaltyKillPct', 0.80), # fallback average 80%
                 'faceoff_pct': adv_data.get('faceoffWinPct', 0.50), # fallback average 50%
                 'shots_for_pg': adv_data.get('shotsForPerGame', 30.0),
-                'shots_against_pg': adv_data.get('shotsAgainstPerGame', 30.0)
+                'shots_against_pg': adv_data.get('shotsAgainstPerGame', 30.0),
+                # New Phase 4 Deep Metrics
+                'xg_for_pg': mp_data.get('xg_for_pg', 3.0),
+                'xg_against_pg': mp_data.get('xg_against_pg', 3.0),
+                'sv_pct': mp_data.get('sv_pct', 0.900),
+                'is_b2b': is_b2b
             }
             teams.append(team_stats)
             
@@ -95,7 +107,17 @@ class FeatureEngine:
             'home_pk_pct': home_stats['pk_pct'],
             'away_pk_pct': away_stats['pk_pct'],
             'home_shots_diff': home_stats['shots_for_pg'] - home_stats['shots_against_pg'],
-            'away_shots_diff': away_stats['shots_for_pg'] - away_stats['shots_against_pg']
+            'away_shots_diff': away_stats['shots_for_pg'] - away_stats['shots_against_pg'],
+            
+            # Phase 4 Extreme Deep Metrics
+            'home_xg_for_pg': home_stats['xg_for_pg'],
+            'away_xg_for_pg': away_stats['xg_for_pg'],
+            'home_xg_against_pg': home_stats['xg_against_pg'],
+            'away_xg_against_pg': away_stats['xg_against_pg'],
+            'home_sv_pct': home_stats['sv_pct'],
+            'away_sv_pct': away_stats['sv_pct'],
+            'home_is_b2b': home_stats['is_b2b'],
+            'away_is_b2b': away_stats['is_b2b']
         }
         
         return pd.DataFrame([features])

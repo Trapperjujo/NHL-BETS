@@ -40,7 +40,12 @@ class HistoricalDataBuilder:
         # Calculate Rolling Averages (Last 10 games) per team per season
         def calculate_rolling(group):
             # Shift by 1 so the game itself isn't included in the predict features
-            rolling = group[['win', 'goalsFor', 'goalsAgainst', 'shotsOnGoalFor', 'shotsOnGoalAgainst', 'faceOffsWonFor', 'faceOffsWonAgainst']].rolling(window=10, min_periods=1).mean().shift(1)
+            rolling_cols = ['win', 'goalsFor', 'goalsAgainst', 
+                            'shotsOnGoalFor', 'shotsOnGoalAgainst', 
+                            'faceOffsWonFor', 'faceOffsWonAgainst',
+                            'xGoalsFor', 'xGoalsAgainst', 'savedShotsOnGoalAgainst']
+            
+            rolling = group[rolling_cols].rolling(window=10, min_periods=1).mean().shift(1)
             
             group['l10_win_pct'] = rolling['win']
             group['gf_pg'] = rolling['goalsFor']
@@ -48,10 +53,19 @@ class HistoricalDataBuilder:
             group['shots_for_pg'] = rolling['shotsOnGoalFor']
             group['shots_against_pg'] = rolling['shotsOnGoalAgainst']
             
+            # New Advanced Metrics (Phase 4)
+            group['xg_for_pg'] = rolling['xGoalsFor']
+            group['xg_against_pg'] = rolling['xGoalsAgainst']
+            group['sv_pct'] = (rolling['savedShotsOnGoalAgainst'] / (rolling['shotsOnGoalAgainst'] + 0.001)).fillna(0.900)
+            
             # Approximate Faceoff %
             f_won = rolling['faceOffsWonFor']
             f_lost = rolling['faceOffsWonAgainst']
             group['faceoff_pct'] = f_won / (f_won + f_lost + 0.001)
+            
+            # Schedule Fatigue (B2B)
+            group['days_rest'] = group['gameDate'].diff().dt.days
+            group['is_b2b'] = (group['days_rest'] <= 1).astype(int)
             
             # Cumulative win percentage for the whole season up to this point
             cum_games = group.reset_index().index
@@ -73,7 +87,11 @@ class HistoricalDataBuilder:
             'shots_for_pg': 30.0,
             'shots_against_pg': 30.0,
             'faceoff_pct': 0.5,
-            'win_pct': 0.5
+            'win_pct': 0.5,
+            'xg_for_pg': 3.0,
+            'xg_against_pg': 3.0,
+            'sv_pct': 0.900,
+            'is_b2b': 0
         }, inplace=True)
 
         print("Restructuring into Matchup pairs (Home vs Away)...")
@@ -82,7 +100,8 @@ class HistoricalDataBuilder:
         away_games = df[df['home_or_away'] == 'AWAY'].copy()
         
         # Rename columns to distinguish home and away features
-        feature_cols = ['win_pct', 'gf_pg', 'ga_pg', 'l10_win_pct', 'shots_for_pg', 'shots_against_pg', 'faceoff_pct']
+        feature_cols = ['win_pct', 'gf_pg', 'ga_pg', 'l10_win_pct', 'shots_for_pg', 'shots_against_pg', 
+                        'faceoff_pct', 'xg_for_pg', 'xg_against_pg', 'sv_pct', 'is_b2b']
         
         home_features = home_games[['gameId', 'playerTeam', 'win'] + feature_cols].rename(
             columns={col: f'home_{col}' for col in feature_cols}
