@@ -7,7 +7,7 @@ st.set_page_config(page_title="NHL Betting Predictor", page_icon="🏒", layout=
 st.title("🏒 Pro NHL Betting Predictor")
 st.caption("Advanced **XGBoost + Poisson Distribution** engine trained on 6,700 real games. Predicts Moneyline, Exact Score, and Over/Under +EV opportunities.")
 
-@st.cache_resource
+@st.cache_resource()
 def load_predictor():
     app = ProfessionalNHLPredictor()
     app.train_real_model()
@@ -19,14 +19,15 @@ st.header("Today's NHL Predictions")
 
 if st.button("🔄 Refresh Live Odds & Predictions"):
     st.cache_data.clear()
+    st.cache_resource.clear()
     st.rerun()
 
 @st.cache_data(ttl=3600)
-def get_daily_predictions_v4():
+def get_daily_predictions_v5():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v4()
+    results = get_daily_predictions_v5()
 
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
