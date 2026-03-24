@@ -7,7 +7,7 @@ st.set_page_config(page_title="NHL Betting Predictor", page_icon="🏒", layout=
 st.title("🏒 Pro NHL Betting Predictor")
 st.caption("This application uses an advanced **XGBoost** Machine Learning model to predict NHL games and find **Positive Expected Value (+EV)** bets based on real-time data from the NHL OpenAPI and MoneyPuck.")
 
-# Do not cache the ML object on Streamlit Cloud to prevent C-level thread lock freezes
+@st.cache_resource
 def load_predictor():
     app = ProfessionalNHLPredictor()
     app.train_real_model()
