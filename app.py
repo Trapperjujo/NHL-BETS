@@ -45,8 +45,8 @@ else:
         
     st.subheader("📊 All Game Analysis")
     # Clean up df for display
-    display_df = df[['matchup', 'predicted_winner', 'confidence', 'odds', 'ev', 'data_source']].copy()
-    display_df.columns = ['Matchup', 'Predicted Winner', 'Model Confidence', 'Decimal Odds', 'Expected Value ($ per 100)', 'Odds Source']
+    display_df = df[['matchup', 'date', 'predicted_winner', 'confidence', 'odds', 'ev', 'data_source']].copy()
+    display_df.columns = ['Matchup', 'Date/Time (UTC)', 'Predicted Winner', 'Model Confidence', 'Decimal Odds', 'Expected Value ($ per 100)', 'Odds Source']
     
     # Apply color styling
     def color_ev(val):

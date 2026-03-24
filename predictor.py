@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import datetime
 from sklearn.ensemble import RandomForestClassifier
 
 from data_fetcher import NHLDataFetcher
@@ -84,6 +85,14 @@ class ProfessionalNHLPredictor:
         for game in games:
             home_team = game.get('homeTeam', {})
             away_team = game.get('awayTeam', {})
+            start_time_utc = game.get('startTimeUTC', 'Unknown')
+            
+            # Format the time (Basic string parsing since we know ISO format)
+            try:
+                dt = datetime.datetime.strptime(start_time_utc, "%Y-%m-%dT%H:%M:%SZ")
+                formatted_time = dt.strftime("%A, %b %d at %H:%M UTC")
+            except:
+                formatted_time = start_time_utc
             
             home_abbrev = home_team.get('abbrev')
             away_abbrev = away_team.get('abbrev')
@@ -123,7 +132,7 @@ class ProfessionalNHLPredictor:
                 ev = self.odds.calculate_ev(away_prob, away_odds)
 
             # 4. Display results
-            print(f"MATCHUP: {away_abbrev} @ {home_abbrev}")
+            print(f"MATCHUP: {away_abbrev} @ {home_abbrev} [{formatted_time}]")
             print(f"  Predicted Winner : {predicted_winner} ({model_confidence*100:.1f}%)")
             print(f"  Live Odds        : {predicted_winner} @ {suggested_odds} {data_source}")
             
@@ -135,6 +144,7 @@ class ProfessionalNHLPredictor:
             
             results.append({
                 'matchup': f"{away_abbrev} @ {home_abbrev}",
+                'date': formatted_time,
                 'predicted_winner': predicted_winner,
                 'confidence': f"{model_confidence*100:.1f}%",
                 'odds': suggested_odds,
