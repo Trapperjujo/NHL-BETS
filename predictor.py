@@ -31,17 +31,23 @@ class ProfessionalNHLPredictor:
         Loads the massive historical dataset compiled by historical_data_builder.py
         and trains the predictive model on thousands of real game outcomes.
         """
+        import joblib, os
+        model_path = "nhl_model.pkl"
+        
+        # Fast path: load a previously saved model from disk
+        if os.path.exists(model_path):
+            print("Loading cached model from disk (nhl_model.pkl)...")
+            self.model = joblib.load(model_path)
+            self.is_trained = True
+            print("Model loaded instantly from cache!")
+            return
+        
         print("Loading real historical NHL game database...")
         try:
             df = pd.read_csv("historical_training_data.csv")
             print(f"Loaded {len(df)} historical matchups. Training algorithm...")
             
-            # The database contains most features, but we need to supply the 
-            # advanced Phase 2 metrics (PP%, PK%, Streak) that MoneyPuck's CSV 
-            # lacked, so the model knows how to weigh them when it sees them in real-time.
-            # We approximate historical PP%/PK% variance by correlating it directly to team goal scoring.
-            
-            df['home_streak'] = 0 # Baseline
+            df['home_streak'] = 0
             df['away_streak'] = 0
             df['home_pp_pct'] = 20.0 + (df['home_gf_pg'] - 3.0) * 5.0
             df['away_pp_pct'] = 20.0 + (df['away_gf_pg'] - 3.0) * 5.0
@@ -66,6 +72,10 @@ class ProfessionalNHLPredictor:
             self.model.fit(X, y)
             self.is_trained = True
             print("Model successfully trained on historical data!\n")
+            
+            # Save for instant load next time
+            joblib.dump(self.model, model_path)
+            print(f"Model saved to {model_path} for fast future loads.")
             
         except FileNotFoundError:
             print("ERROR: historical_training_data.csv not found! Run historical_data_builder.py first.")
