@@ -4,7 +4,7 @@ class FeatureEngine:
     def __init__(self):
         pass
         
-    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, tired_teams=None, starting_goalies=None):
+    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, tired_teams=None, starting_goalies=None, injury_impacts=None):
         """
         Converts the raw API standings JSON, advanced stats JSON, and MP stats 
         into a merged pandas DataFrame.
@@ -15,6 +15,7 @@ class FeatureEngine:
         moneypuck_stats = moneypuck_stats or {}
         tired_teams = tired_teams or []
         starting_goalies = starting_goalies or {}
+        injury_impacts = injury_impacts or {}
 
         # Create a dict from advanced stats using teamFullName as the key
         adv_stats_dict = {
@@ -68,8 +69,12 @@ class FeatureEngine:
                 'faceoff_pct': adv_data.get('faceoffWinPct', 0.50), # fallback average 50%
                 'shots_for_pg': adv_data.get('shotsForPerGame', 30.0),
                 'shots_against_pg': adv_data.get('shotsAgainstPerGame', 30.0),
-                # New Phase 4 Deep Metrics
-                'xg_for_pg': mp_data.get('xg_for_pg', 3.0),
+                
+                # Phase 9: Injury Tracking Penalty
+                # Reduce the team's historical Expected Goals by the exact mathematical % missing due to scratched players
+                'xg_for_pg': mp_data.get('xg_for_pg', 3.0) * (1.0 - injury_impacts.get(team_id, 0.0)),
+                'injury_penalty_pct': injury_impacts.get(team_id, 0.0),
+                
                 'xg_against_pg': mp_data.get('xg_against_pg', 3.0),
                 
                 # Phase 9: Individual Goalie Override
@@ -166,9 +171,11 @@ class FeatureEngine:
             'home_elo': home_stats['elo'],
             'away_elo': away_stats['elo'],
             
-            # Phase 9: Individual Goalie Context (for the UI)
+            # Phase 9: Individual Goalie & Injury Context (for the UI and prediction)
             'home_goalie': home_stats['starting_goalie'],
-            'away_goalie': away_stats['starting_goalie']
+            'away_goalie': away_stats['starting_goalie'],
+            'home_injury_penalty': home_stats['injury_penalty_pct'],
+            'away_injury_penalty': away_stats['injury_penalty_pct']
         }
         
         return pd.DataFrame([features])

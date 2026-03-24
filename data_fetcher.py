@@ -110,6 +110,97 @@ class NHLDataFetcher:
             print(f"Failed to fetch individual starting goalie data: {e}")
             return {}
 
+    def fetch_injury_impacts(self, team_abbrevs):
+        """
+        Phase 9 Upgrade: Individual Player Tracking
+        - Scrapes ESPN to find injured/scratched players for tonight's teams.
+        - Cross-references MoneyPuck skaters.csv to calculate the exact % of 
+          Expected Goals (xG) the team is missing due to these injuries.
+        Returns a dict: { 'EDM': 0.15 }  (meaning Edmonton is missing 15% of their xG firepower)
+        """
+        import pandas as pd
+        import io
+        
+        impacts = {}
+        try:
+            # 1. Download MoneyPuck Skater Data (all skaters, season aggregate)
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            # Note: Hardcoding '2024' or fetching 'current' based on season logic. 2024=2024-25 season.
+            url = f"{self.moneypuck_base}/seasonSummary/2024/regular/skaters.csv" 
+            mp_resp = requests.get(url, headers=headers)
+            mp_resp.raise_for_status()
+            
+            df = pd.read_csv(io.StringIO(mp_resp.text))
+            df = df[df['situation'] == 'all']
+            
+            # Map Team Abbrevs back to ESPN format for the API call
+            nhl_to_espn_map = {v: k for k, v in self.espn_to_nhl_map.items()}
+            
+            for team_nhl in team_abbrevs:
+                team_espn = nhl_to_espn_map.get(team_nhl, team_nhl).lower()
+                
+                # Fetch ESPN Roster/Injuries
+                espn_resp = requests.get(f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/teams/{team_espn}/roster")
+                if espn_resp.status_code != 200:
+                    impacts[team_nhl] = 0.0
+                    continue
+                    
+                roster_data = espn_resp.json()
+                injured_names = []
+                
+                for group in roster_data.get('athletes', []):
+                    for player in group.get('items', []):
+                        injuries = player.get('injuries', [])
+                        if injuries:
+                            status = injuries[0].get('status', '').lower()
+                            # Ensure we only track players who are actually missing the game
+                            if status in ['out', 'injured reserve', 'day-to-day']:
+                                injured_names.append(player.get('fullName'))
+                
+                if not injured_names:
+                    impacts[team_nhl] = 0.0
+                    continue
+                    
+                # Calculate the team's total expected goals (from MoneyPuck)
+                # MoneyPuck uses their own team abbreviations, usually matches NHL.
+                team_df = df[df['team'] == team_nhl]
+                if team_df.empty:
+                    # Some MoneyPuck team abbrevs might differ (e.g. T.B instead of TBL) - handle standard exceptions
+                    mp_map = {'TBL': 'T.B', 'NJD': 'N.J', 'SJS': 'S.J', 'LAK': 'L.A'}
+                    mp_team = mp_map.get(team_nhl, team_nhl)
+                    team_df = df[df['team'] == mp_team]
+                
+                if team_df.empty:
+                    impacts[team_nhl] = 0.0
+                    continue
+                    
+                total_team_xg = team_df['I_F_xGoals'].sum()
+                if total_team_xg <= 0:
+                    impacts[team_nhl] = 0.0
+                    continue
+                    
+                # Sum the missing xG
+                missing_xg_total = 0.0
+                for missing_player in injured_names:
+                    # Fuzz match the player name
+                    player_row = team_df[team_df['name'].str.contains(missing_player.split()[-1], case=False, na=False)]
+                    if not player_row.empty:
+                        # take highest xg if multiple matches (e.g. players traded mid season)
+                        missing_xg_total += player_row['I_F_xGoals'].max()
+                        
+                # Provide a cap (max 40%) so a team isn't penalized 100% just because of bad data matching or massive rebuilding
+                impact_pct = min(missing_xg_total / total_team_xg, 0.40) 
+                impacts[team_nhl] = impact_pct
+                
+                if impact_pct > 0.05: # Only log major impacts
+                    print(f"[{team_nhl}] Missing {impact_pct*100:.1f}% of offensive xG due to injury! (Out: {', '.join(injured_names)})")
+                    
+            return impacts
+            
+        except Exception as e:
+            print(f"Failed to fetch injury impact data: {e}")
+            return {}
+
     def fetch_current_standings(self):
         """Fetch real-time regular season standings and team stats."""
         try:

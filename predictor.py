@@ -137,6 +137,14 @@ class ProfessionalNHLPredictor:
         print("Scraping Confirmed Starting Goalies (Phase 9)...")
         starting_goalies = self.fetcher.fetch_starting_goalies()
         
+        print("Scraping Active Roster Injuries & Scratches (Phase 9)...")
+        all_teams = []
+        if schedule:
+            for g in schedule:
+                all_teams.append(g.get('homeTeam', {}).get('abbrev'))
+                all_teams.append(g.get('awayTeam', {}).get('abbrev'))
+        injury_impacts = self.fetcher.fetch_injury_impacts(list(set(filter(None, all_teams))))
+
         if not schedule:
             print("No games scheduled today or data unavailable.")
             return []
@@ -146,7 +154,8 @@ class ProfessionalNHLPredictor:
             advanced_stats_data=advanced_stats,
             moneypuck_stats=mp_stats,
             tired_teams=tired_teams,
-            starting_goalies=starting_goalies
+            starting_goalies=starting_goalies,
+            injury_impacts=injury_impacts
         )
         print(f"Engineered features for {len(team_features)} teams.\n")
 
@@ -186,11 +195,13 @@ class ProfessionalNHLPredictor:
                 print(f"Skipping {away_abbrev} @ {home_abbrev}: Missing team stats.")
                 continue
 
-            # Extract metadata (strings) before pushing to XGBoost matrix
+            # Extract metadata (strings/non-training floats) before pushing to XGBoost matrix
             home_goalie = matchup_features['home_goalie'].values[0] if 'home_goalie' in matchup_features.columns else 'Team Avg'
             away_goalie = matchup_features['away_goalie'].values[0] if 'away_goalie' in matchup_features.columns else 'Team Avg'
+            home_injury_penalty = matchup_features['home_injury_penalty'].values[0] if 'home_injury_penalty' in matchup_features.columns else 0.0
+            away_injury_penalty = matchup_features['away_injury_penalty'].values[0] if 'away_injury_penalty' in matchup_features.columns else 0.0
             
-            X_live = matchup_features.drop(columns=['home_goalie', 'away_goalie'], errors='ignore')
+            X_live = matchup_features.drop(columns=['home_goalie', 'away_goalie', 'home_injury_penalty', 'away_injury_penalty'], errors='ignore')
 
             # 1. Predict Outcome
             prob = self.model.predict_proba(X_live)[0]
@@ -281,9 +292,11 @@ class ProfessionalNHLPredictor:
                 'ev_over': ev_over,
                 'ev_under': ev_under,
                 
-                # Phase 9 Goalies
+                # Phase 9 Goalies & Injuries
                 'home_goalie': home_goalie,
                 'away_goalie': away_goalie,
+                'home_injury_penalty': home_injury_penalty,
+                'away_injury_penalty': away_injury_penalty,
                 
                 'data_source': "Odds API" if odds_data.get('is_real_data') else "Mocked"
             })

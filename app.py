@@ -23,11 +23,11 @@ if st.button("🔄 Refresh Live Odds & Predictions"):
     st.rerun()
 
 @st.cache_data(ttl=3600)
-def get_daily_predictions_v6():
+def get_daily_predictions_v7():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v6()
+    results = get_daily_predictions_v7()
 
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
@@ -55,7 +55,17 @@ else:
             exact_sc = res.get('exact_score', 'N/A')
             src_badge = "🟢 Live API" if res.get('data_source') == 'Odds API' else "🟡 Mocked"
             st.markdown(f"### {res['matchup']}   |   🎯 Pred. Score: **{exact_sc}**   {src_badge}")
-            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} (Away) vs {res.get('home_goalie', 'Team Avg')} (Home)")
+            
+            # Formulate Phase 9 Injury Warnings
+            injury_text = []
+            away_abbrev, home_abbrev = res['matchup'].split(' @ ')
+            if res.get('away_injury_penalty', 0) > 0.05:
+                injury_text.append(f"{away_abbrev} (-{res['away_injury_penalty']*100:.0f}% xG)")
+            if res.get('home_injury_penalty', 0) > 0.05:
+                injury_text.append(f"{home_abbrev} (-{res['home_injury_penalty']*100:.0f}% xG)")
+            inj_str = f"  |  🏥 **Injuries:** {', '.join(injury_text)}" if injury_text else ""
+            
+            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} vs {res.get('home_goalie', 'Team Avg')}{inj_str}")
 
             # Moneyline
             st.markdown("##### Moneyline")
