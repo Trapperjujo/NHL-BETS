@@ -131,7 +131,6 @@ class ProfessionalNHLPredictor:
         schedule = self.fetcher.fetch_todays_schedule()
         
         print("Fetching real-time Extreme Deep Metrics (Fatigue, xG, SV%)...")
-        tired_teams = self.fetcher.fetch_tired_teams()
         mp_stats = self.fetcher.fetch_moneypuck_stats()
         
         print("Scraping Confirmed Starting Goalies (Phase 9)...")
@@ -143,7 +142,13 @@ class ProfessionalNHLPredictor:
             for g in schedule:
                 all_teams.append(g.get('homeTeam', {}).get('abbrev'))
                 all_teams.append(g.get('awayTeam', {}).get('abbrev'))
+                
+        # Scrape Injuries
         injury_impacts = self.fetcher.fetch_injury_impacts(list(set(filter(None, all_teams))))
+        
+        # Phase 10: Travel & Rest Calculus
+        print("Calculating exact Travel & Rest Disparity (Phase 10)...")
+        rest_days_dict = self.fetcher.fetch_rest_days(list(set(filter(None, all_teams))))
 
         if not schedule:
             print("No games scheduled today or data unavailable.")
@@ -153,7 +158,7 @@ class ProfessionalNHLPredictor:
             standings_data=standings, 
             advanced_stats_data=advanced_stats,
             moneypuck_stats=mp_stats,
-            tired_teams=tired_teams,
+            rest_days_dict=rest_days_dict,
             starting_goalies=starting_goalies,
             injury_impacts=injury_impacts
         )
@@ -201,7 +206,13 @@ class ProfessionalNHLPredictor:
             home_injury_penalty = matchup_features['home_injury_penalty'].values[0] if 'home_injury_penalty' in matchup_features.columns else 0.0
             away_injury_penalty = matchup_features['away_injury_penalty'].values[0] if 'away_injury_penalty' in matchup_features.columns else 0.0
             
-            X_live = matchup_features.drop(columns=['home_goalie', 'away_goalie', 'home_injury_penalty', 'away_injury_penalty'], errors='ignore')
+            home_rest = matchup_features['home_rest_days'].values[0] if 'home_rest_days' in matchup_features.columns else 2
+            away_rest = matchup_features['away_rest_days'].values[0] if 'away_rest_days' in matchup_features.columns else 2
+            
+            X_live = matchup_features.drop(columns=[
+                'home_goalie', 'away_goalie', 'home_injury_penalty', 'away_injury_penalty', 
+                'home_rest_days', 'away_rest_days'
+            ], errors='ignore')
 
             # 1. Predict Outcome
             prob = self.model.predict_proba(X_live)[0]
@@ -257,8 +268,16 @@ class ProfessionalNHLPredictor:
             home_st_disparity = (home_pp_goals - 0.5) * 0.40 # Dampen the multiplier to prevent exponential bleeding
             away_st_disparity = (away_pp_goals - 0.5) * 0.40
             
-            home_proj_goals = home_proj_goals_base + home_st_disparity
-            away_proj_goals = away_proj_goals_base + away_st_disparity
+            # Phase 10: Travel & Rest Disparity Calculus
+            # Compare the exact days of rest between the opponents
+            rest_advantage = home_rest - away_rest
+            
+            # A completely rested team (3+ days) vs a back-to-back team (-2 days) generates roughly +0.2 marginal goal edge
+            # Scale the penalty naturally: rest_advantage of +3 results in roughly +0.15 goals.
+            home_rest_boost = rest_advantage * 0.05
+            
+            home_proj_goals = home_proj_goals_base + home_st_disparity + home_rest_boost
+            away_proj_goals = away_proj_goals_base + away_st_disparity - home_rest_boost
             
             # Ensure goal projections don't break Poisson math (must be positive)
             home_proj_goals = max(0.1, home_proj_goals)
@@ -340,9 +359,10 @@ class ProfessionalNHLPredictor:
                 'kelly_over': kelly_over,
                 'kelly_under': kelly_under,
                 
-                # Phase 10 Special Teams
+                # Phase 10 Special Teams & Travel
                 'home_st_disparity': home_st_disparity,
                 'away_st_disparity': away_st_disparity,
+                'home_rest_boost': home_rest_boost,
                 
                 'data_source': "Odds API" if odds_data.get('is_real_data') else "Mocked"
             })

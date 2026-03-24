@@ -239,23 +239,43 @@ class NHLDataFetcher:
             print(f"Error fetching schedule: {e}")
             return []
 
-    def fetch_tired_teams(self):
-        """Returns a list of team abbreviations that played yesterday (Back-to-Back)."""
-        yesterday_str = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        url = f"https://api-web.nhle.com/v1/schedule/{yesterday_str}"
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            data = response.json()
-            tired_teams = []
-            for day in data.get('gameWeek', []):
-                if day.get('date') == yesterday_str:
-                    for game in day.get('games', []):
-                        tired_teams.append(game.get('homeTeam', {}).get('abbrev'))
-                        tired_teams.append(game.get('awayTeam', {}).get('abbrev'))
-            return tired_teams
-        except requests.RequestException:
-            return []
+    def fetch_rest_days(self, team_abbrevs):
+        """
+        Phase 10 Upgrade: Mathematical Travel & Rest Calculus
+        Calculates the exact number of rest days for each team playing today.
+        0 days = Back-to-Back (B2B)
+        1 day = Normal routine rest
+        5 days = 5+ days fully rested
+        """
+        import datetime
+        rest_days_dict = {team: 5 for team in team_abbrevs} # Default to 5+ days rested
+        
+        today = datetime.datetime.now().date()
+        
+        # Look backward through the schedule API up to 4 days ago
+        for days_ago in range(1, 5):
+            target_date = (today - datetime.timedelta(days=days_ago)).strftime("%Y-%m-%d")
+            url = f"{self.base_url}/schedule/{target_date}"
+            
+            try:
+                resp = requests.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for day in data.get('gameWeek', []):
+                        if day.get('date') == target_date:
+                            for game in day.get('games', []):
+                                home = game.get('homeTeam', {}).get('abbrev')
+                                away = game.get('awayTeam', {}).get('abbrev')
+                                
+                                # If the team played `days_ago` and we haven't tagged a more recent game yet
+                                if home in rest_days_dict and rest_days_dict[home] == 5:
+                                    rest_days_dict[home] = days_ago - 1
+                                if away in rest_days_dict and rest_days_dict[away] == 5:
+                                    rest_days_dict[away] = days_ago - 1
+            except Exception as e:
+                pass
+                
+        return rest_days_dict
 
     def fetch_moneypuck_stats(self):
         """Fetches advanced xG and SV% metrics for all teams from MoneyPuck's daily CSV."""

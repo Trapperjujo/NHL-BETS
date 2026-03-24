@@ -27,11 +27,11 @@ if st.button("🔄 Refresh Live Odds & Predictions"):
     st.rerun()
 
 @st.cache_data(ttl=3600)
-def get_daily_predictions_v9():
+def get_daily_predictions_v10():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v9()
+    results = get_daily_predictions_v10()
 
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
@@ -86,7 +86,19 @@ else:
                 
             st_str = f"  |  ⚡ **Special Teams:** {', '.join(st_text)}" if st_text else ""
             
-            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} vs {res.get('home_goalie', 'Team Avg')}{inj_str}{st_str}")
+            # Formulate Phase 10 Travel/Rest Advantage
+            rest_text = []
+            home_rest_boost = res.get('home_rest_boost', 0)
+            if home_rest_boost >= 0.10: # +2 days of rest advantage
+                rest_text.append(f"{home_abbrev} (+ Rest)")
+                rest_text.append(f"{away_abbrev} (Fatigued)")
+            elif home_rest_boost <= -0.10:
+                rest_text.append(f"{away_abbrev} (+ Rest)")
+                rest_text.append(f"{home_abbrev} (Fatigued)")
+                
+            rest_str = f"  |  🛌 **Rest:** {', '.join(rest_text)}" if rest_text else ""
+            
+            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} vs {res.get('home_goalie', 'Team Avg')}{inj_str}{st_str}{rest_str}")
 
             # Moneyline
             st.markdown("##### Moneyline")

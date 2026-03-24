@@ -4,7 +4,7 @@ class FeatureEngine:
     def __init__(self):
         pass
         
-    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, tired_teams=None, starting_goalies=None, injury_impacts=None):
+    def build_team_features(self, standings_data, advanced_stats_data, moneypuck_stats=None, rest_days_dict=None, starting_goalies=None, injury_impacts=None):
         """
         Converts the raw API standings JSON, advanced stats JSON, and MP stats 
         into a merged pandas DataFrame.
@@ -13,7 +13,7 @@ class FeatureEngine:
             return pd.DataFrame()
         
         moneypuck_stats = moneypuck_stats or {}
-        tired_teams = tired_teams or []
+        rest_days_dict = rest_days_dict or {}
         starting_goalies = starting_goalies or {}
         injury_impacts = injury_impacts or {}
 
@@ -51,7 +51,10 @@ class FeatureEngine:
 
             team_id = team.get('teamAbbrev', {}).get('default', 'UNK')
             mp_data = moneypuck_stats.get(team_id, {})
-            is_b2b = 1 if team_id in tired_teams else 0
+            
+            # Phase 10: Travel & Rest Calculus
+            rest_days = rest_days_dict.get(team_id, 2) # Default assumption of 2 days rest if not found
+            is_b2b = 1 if rest_days == 0 else 0
 
             # Feature Engineering Merge
             team_stats = {
@@ -84,6 +87,8 @@ class FeatureEngine:
                 'starting_goalie': starting_goalies.get(team_id, {}).get('name', 'Team Average'),
                 
                 'is_b2b': is_b2b,
+                'rest_days': rest_days,
+                
                 # New Phase 6 Ultra-Deep Metrics
                 'cf_pct': mp_data.get('cf_pct', 0.5),
                 'ff_pct': mp_data.get('ff_pct', 0.5),
@@ -175,7 +180,11 @@ class FeatureEngine:
             'home_goalie': home_stats['starting_goalie'],
             'away_goalie': away_stats['starting_goalie'],
             'home_injury_penalty': home_stats['injury_penalty_pct'],
-            'away_injury_penalty': away_stats['injury_penalty_pct']
+            'away_injury_penalty': away_stats['injury_penalty_pct'],
+            
+            # Phase 10: Rest Tracking
+            'home_rest_days': home_stats['rest_days'],
+            'away_rest_days': away_stats['rest_days']
         }
         
         return pd.DataFrame([features])
