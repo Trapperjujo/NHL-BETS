@@ -33,9 +33,54 @@ class HistoricalDataBuilder:
         # Basic outcomes
         df['win'] = (df['goalsFor'] > df['goalsAgainst']).astype(int)
         df['gameDate'] = pd.to_datetime(df['gameDate'])
-        df = df.sort_values(by=['season', 'playerTeam', 'gameDate'])
+        df = df.sort_values(by=['gameDate', 'gameId'])
+
+        print("Calculating Elo ratings for all teams...")
+        
+        # --- Elo Rating Engine ---
+        # Every team starts at 1500. Points transfer after each game.
+        # K=20 means a max of 20 Elo points change hands per game.
+        ELO_BASE = 1500
+        ELO_K = 20
+        elo_ratings = {}
+        
+        # Process chronologically across ALL seasons to preserve momentum
+        sorted_game_ids = df[df['home_or_away'] == 'HOME'][['gameId', 'gameDate', 'playerTeam', 'win']].copy()
+        sorted_game_ids = sorted_game_ids.rename(columns={'playerTeam': 'home_team', 'win': 'home_win'})
+        away_df_elo = df[df['home_or_away'] == 'AWAY'][['gameId', 'playerTeam']].rename(columns={'playerTeam': 'away_team'})
+        game_list = pd.merge(sorted_game_ids, away_df_elo, on='gameId').sort_values('gameDate')
+        
+        elo_records = []
+        for _, game in game_list.iterrows():
+            home = game['home_team']
+            away = game['away_team']
+            home_elo = elo_ratings.get(home, ELO_BASE)
+            away_elo = elo_ratings.get(away, ELO_BASE)
+            
+            # Record Elo BEFORE the game (point-in-time, no leakage)
+            elo_records.append({'gameId': game['gameId'], 'team': home, 'elo': home_elo})
+            elo_records.append({'gameId': game['gameId'], 'team': away, 'elo': away_elo})
+            
+            # Expected win probabilities
+            expected_home = 1 / (1 + 10 ** ((away_elo - home_elo) / 400))
+            expected_away = 1 - expected_home
+            
+            # Update Elo based on actual result
+            if game['home_win'] == 1:
+                elo_ratings[home] = home_elo + ELO_K * (1 - expected_home)
+                elo_ratings[away] = away_elo + ELO_K * (0 - expected_away)
+            else:
+                elo_ratings[home] = home_elo + ELO_K * (0 - expected_home)
+                elo_ratings[away] = away_elo + ELO_K * (1 - expected_away)
+        
+        elo_df = pd.DataFrame(elo_records)
+        
+        # Merge Elo back onto main df
+        df = df.merge(elo_df.rename(columns={'team': 'playerTeam'}), on=['gameId', 'playerTeam'], how='left')
+        df['elo'] = df['elo'].fillna(ELO_BASE)
 
         print("Calculating point-in-time rolling averages for ML features...")
+        df = df.sort_values(by=['season', 'playerTeam', 'gameDate'])
         
         # Calculate Rolling Averages (Last 10 games) per team per season
         def calculate_rolling(group):
@@ -117,7 +162,8 @@ class HistoricalDataBuilder:
             'sva_xg_for': 3.0,
             'sva_xg_against': 3.0,
             'pen_drawn': 3.0,
-            'pen_taken': 3.0
+            'pen_taken': 3.0,
+            'elo': 1500.0
         }, inplace=True)
 
         print("Restructuring into Matchup pairs (Home vs Away)...")
@@ -129,7 +175,7 @@ class HistoricalDataBuilder:
         feature_cols = ['win_pct', 'gf_pg', 'ga_pg', 'l10_win_pct', 'shots_for_pg', 'shots_against_pg', 
                         'faceoff_pct', 'xg_for_pg', 'xg_against_pg', 'sv_pct', 'is_b2b',
                         'cf_pct', 'ff_pct', 'hd_shots_for', 'hd_shots_against', 'hd_xg_for', 'hd_xg_against',
-                        'sva_xg_for', 'sva_xg_against', 'pen_drawn', 'pen_taken']
+                        'sva_xg_for', 'sva_xg_against', 'pen_drawn', 'pen_taken', 'elo']
         
         home_features = home_games[['gameId', 'playerTeam', 'win'] + feature_cols].rename(
             columns={col: f'home_{col}' for col in feature_cols}

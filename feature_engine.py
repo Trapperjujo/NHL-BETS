@@ -82,7 +82,10 @@ class FeatureEngine:
                 'sva_xg_for': mp_data.get('sva_xg_for', 3.0),
                 'sva_xg_against': mp_data.get('sva_xg_against', 3.0),
                 'pen_drawn': mp_data.get('pen_drawn', 3.0),
-                'pen_taken': mp_data.get('pen_taken', 3.0)
+                'pen_taken': mp_data.get('pen_taken', 3.0),
+                # Phase 8: Live Elo estimate (derived from season win percentage)
+                # Win pct of 0.5 → Elo 1500 (average), 0.7 → Elo ~1700 (elite), 0.3 → Elo ~1300 (weak)
+                'elo': 1500 + (wins / games_played - 0.5) * 800 if games_played > 0 else 1500
             }
             teams.append(team_stats)
             
@@ -150,7 +153,11 @@ class FeatureEngine:
             'home_pen_drawn': home_stats['pen_drawn'],
             'away_pen_drawn': away_stats['pen_drawn'],
             'home_pen_taken': home_stats['pen_taken'],
-            'away_pen_taken': away_stats['pen_taken']
+            'away_pen_taken': away_stats['pen_taken'],
+            
+            # Phase 8: Elo Power Ratings
+            'home_elo': home_stats['elo'],
+            'away_elo': away_stats['elo']
         }
         
         return pd.DataFrame([features])
