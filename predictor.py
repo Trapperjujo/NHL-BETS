@@ -231,8 +231,39 @@ class ProfessionalNHLPredictor:
             away_xgf = matchup_features['away_xg_for_pg'].values[0]
             home_xga = matchup_features['home_xg_against_pg'].values[0]
             
-            home_proj_goals = ((home_xgf + away_xga) / 2) * HOME_ADVANTAGE
-            away_proj_goals = (away_xgf + home_xga) / 2
+            home_proj_goals_base = ((home_xgf + away_xga) / 2) * HOME_ADVANTAGE
+            away_proj_goals_base = (away_xgf + home_xga) / 2
+            
+            # Phase 10: Special Teams Disparity Engine
+            # Calculate the explicit mathematical mismatch between PP and PK
+            home_pp = matchup_features['home_pp_pct'].values[0] / 100.0  # e.g., 0.25 (25%)
+            away_pk = matchup_features['away_pk_pct'].values[0] / 100.0  # e.g., 0.80 (80%)
+            away_pp = matchup_features['away_pp_pct'].values[0] / 100.0
+            home_pk = matchup_features['home_pk_pct'].values[0] / 100.0
+            
+            home_pen_drawn = matchup_features['home_pen_drawn'].values[0]
+            away_pen_drawn = matchup_features['away_pen_drawn'].values[0]
+            
+            # Expected powerplay goals = (Pens Drawn) * (PP Success Rate against this specific PK)
+            # Baseline PK is ~80%. So if away_pk is 75%, home_pp gets a mathematical boost.
+            home_pp_adj = home_pp * (0.80 / max(0.01, away_pk))
+            away_pp_adj = away_pp * (0.80 / max(0.01, home_pk))
+            
+            # The raw goals generated specifically from this matchup's special teams
+            home_pp_goals = home_pen_drawn * home_pp_adj
+            away_pp_goals = away_pen_drawn * away_pp_adj
+            
+            # Average PP goals per game is already baked into xG (~0.5), so we extract the *marginal* edge
+            home_st_disparity = (home_pp_goals - 0.5) * 0.40 # Dampen the multiplier to prevent exponential bleeding
+            away_st_disparity = (away_pp_goals - 0.5) * 0.40
+            
+            home_proj_goals = home_proj_goals_base + home_st_disparity
+            away_proj_goals = away_proj_goals_base + away_st_disparity
+            
+            # Ensure goal projections don't break Poisson math (must be positive)
+            home_proj_goals = max(0.1, home_proj_goals)
+            away_proj_goals = max(0.1, away_proj_goals)
+            
             model_projected_total = home_proj_goals + away_proj_goals
             
             prob_over, prob_under = self.calculate_poisson_ou(model_projected_total, odds_data['o_u_line'])
@@ -242,6 +273,12 @@ class ProfessionalNHLPredictor:
             
             # Exact Score Prediction
             exact_home, exact_away = self.predict_exact_score(home_proj_goals, away_proj_goals)
+
+            # Phase 10: Kelly Criterion Fractional Bet Sizing
+            # (Passing 1 as dummy bankroll since it now returns a pure percentage)
+            kelly_ml = self.odds.calculate_kelly_criterion(model_confidence, suggested_odds_ml, 1.0) if ev_ml > 0 else 0.0
+            kelly_over = self.odds.calculate_kelly_criterion(prob_over, odds_data['over_odds'], 1.0) if ev_over > 0 else 0.0
+            kelly_under = self.odds.calculate_kelly_criterion(prob_under, odds_data['under_odds'], 1.0) if ev_under > 0 else 0.0
 
             # 4. Display results
             print(f"MATCHUP: {away_abbrev} @ {home_abbrev} [{formatted_time}]")
@@ -297,6 +334,15 @@ class ProfessionalNHLPredictor:
                 'away_goalie': away_goalie,
                 'home_injury_penalty': home_injury_penalty,
                 'away_injury_penalty': away_injury_penalty,
+                
+                # Phase 10 Kelly Sizing
+                'kelly_ml': kelly_ml,
+                'kelly_over': kelly_over,
+                'kelly_under': kelly_under,
+                
+                # Phase 10 Special Teams
+                'home_st_disparity': home_st_disparity,
+                'away_st_disparity': away_st_disparity,
                 
                 'data_source': "Odds API" if odds_data.get('is_real_data') else "Mocked"
             })

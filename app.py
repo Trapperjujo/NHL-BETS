@@ -15,6 +15,10 @@ def load_predictor():
 
 predictor = load_predictor()
 
+st.sidebar.title("💰 Bankroll Management")
+st.sidebar.caption("The predictor uses the **Kelly Criterion** to mathematically calculate your optimal bet size to maximize compound growth while preventing bankruptcy.")
+user_bankroll = st.sidebar.number_input("Your Total Bankroll ($)", min_value=10, max_value=1000000, value=1000, step=50)
+
 st.header("Today's NHL Predictions")
 
 if st.button("🔄 Refresh Live Odds & Predictions"):
@@ -23,11 +27,11 @@ if st.button("🔄 Refresh Live Odds & Predictions"):
     st.rerun()
 
 @st.cache_data(ttl=3600)
-def get_daily_predictions_v7():
+def get_daily_predictions_v9():
     return predictor.run_daily_predictions()
 
 with st.spinner("Fetching live NHL stats, training models, and pulling odds..."):
-    results = get_daily_predictions_v7()
+    results = get_daily_predictions_v9()
 
 if not results:
     st.info("No NHL games are scheduled for today, or data could not be retrieved.")
@@ -36,11 +40,14 @@ else:
     ev_bets = []
     for res in results:
         if res.get('ev', 0) > 0:
-            ev_bets.append(f"**{res['predicted_winner']}** ML (+${res['ev']:.2f}EV)")
+            rec_wager = user_bankroll * res.get('kelly_ml', 0)
+            ev_bets.append(f"**{res['predicted_winner']}** ML (Bet ${rec_wager:.2f})")
         if res.get('ev_over', 0) > 0:
-            ev_bets.append(f"**OVER {res['o_u_line']}** ({res['matchup']}) (+${res['ev_over']:.2f}EV)")
+            rec_wager = user_bankroll * res.get('kelly_over', 0)
+            ev_bets.append(f"**OVER {res['o_u_line']}** {res['matchup']} (Bet ${rec_wager:.2f})")
         if res.get('ev_under', 0) > 0:
-            ev_bets.append(f"**UNDER {res['o_u_line']}** ({res['matchup']}) (+${res['ev_under']:.2f}EV)")
+            rec_wager = user_bankroll * res.get('kelly_under', 0)
+            ev_bets.append(f"**UNDER {res['o_u_line']}** {res['matchup']} (Bet ${rec_wager:.2f})")
 
     if ev_bets:
         st.success("✅ **Today's +EV Bets:** " + "  |  ".join(ev_bets))
@@ -65,7 +72,21 @@ else:
                 injury_text.append(f"{home_abbrev} (-{res['home_injury_penalty']*100:.0f}% xG)")
             inj_str = f"  |  🏥 **Injuries:** {', '.join(injury_text)}" if injury_text else ""
             
-            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} vs {res.get('home_goalie', 'Team Avg')}{inj_str}")
+            # Formulate Phase 10 Special Teams Edge
+            st_text = []
+            if res.get('away_st_disparity', 0) > 0.1:
+                st_text.append(f"{away_abbrev} (+{res['away_st_disparity']:.2f} PP Edge)")
+            elif res.get('away_st_disparity', 0) < -0.1:
+                st_text.append(f"{away_abbrev} ({res['away_st_disparity']:.2f} PP Edge)")
+                
+            if res.get('home_st_disparity', 0) > 0.1:
+                st_text.append(f"{home_abbrev} (+{res['home_st_disparity']:.2f} PP Edge)")
+            elif res.get('home_st_disparity', 0) < -0.1:
+                st_text.append(f"{home_abbrev} ({res['home_st_disparity']:.2f} PP Edge)")
+                
+            st_str = f"  |  ⚡ **Special Teams:** {', '.join(st_text)}" if st_text else ""
+            
+            st.caption(f"📅 {res.get('date', '')}  |  🥅 **Goalies:** {res.get('away_goalie', 'Team Avg')} vs {res.get('home_goalie', 'Team Avg')}{inj_str}{st_str}")
 
             # Moneyline
             st.markdown("##### Moneyline")
@@ -79,7 +100,8 @@ else:
 
             ev_ml = res.get('ev', 0)
             if ev_ml > 0:
-                st.success(f"📈 **Moneyline Value Bet!** EV: +${ev_ml:.2f} per $100")
+                rec_wager = user_bankroll * res.get('kelly_ml', 0)
+                st.success(f"📈 **Moneyline Value Bet!** EV: +${ev_ml:.2f} per $100  |  💰 **Rec. Wager:** ${rec_wager:.2f} ({res.get('kelly_ml', 0)*100:.1f}%)")
             else:
                 st.warning(f"📉 **No ML Edge.** EV: ${ev_ml:.2f} per $100. Skip.")
 
@@ -96,9 +118,11 @@ else:
             ev_over = res.get('ev_over', 0)
             ev_under = res.get('ev_under', 0)
             if ev_over > 0:
-                st.success(f"📈 **OVER {res.get('o_u_line')} is a Value Bet!** EV: +${ev_over:.2f} per $100")
+                rec_wager = user_bankroll * res.get('kelly_over', 0)
+                st.success(f"📈 **OVER {res.get('o_u_line')} is a Value Bet!** EV: +${ev_over:.2f}  |  💰 **Rec. Wager:** ${rec_wager:.2f}")
             elif ev_under > 0:
-                st.success(f"📈 **UNDER {res.get('o_u_line')} is a Value Bet!** EV: +${ev_under:.2f} per $100")
+                rec_wager = user_bankroll * res.get('kelly_under', 0)
+                st.success(f"📈 **UNDER {res.get('o_u_line')} is a Value Bet!** EV: +${ev_under:.2f}  |  💰 **Rec. Wager:** ${rec_wager:.2f}")
             else:
                 st.warning(f"📉 **No O/U Edge.** (Over EV: ${ev_over:.2f} | Under EV: ${ev_under:.2f}). Skip.")
 
@@ -134,13 +158,14 @@ else:
         use_container_width=True
     )
 
+st.sidebar.divider()
 st.sidebar.title("About the Model")
 st.sidebar.info("""
 **Architecture**:
 - **Data**: Live NHL API + MoneyPuck deep analytics (Corsi, Fenwick, High-Danger xG)
 - **ML**: XGBoost – 62.4% cross-validated accuracy on 6,700 real games
 - **Score Engine**: Poisson Distribution exact score simulator
-- **Betting**: Moneyline, Over/Under, and full +EV analysis
+- **Betting**: Moneyline, Over/Under, Kelly Criterion, and full +EV analysis
 - **Odds**: The Odds API (live) or mathematical mock fallback
 """)
 

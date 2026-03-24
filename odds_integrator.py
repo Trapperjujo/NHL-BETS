@@ -114,3 +114,38 @@ class OddsIntegrator:
         
         expected_value = (prob_win * amount_won) - (prob_lose * amount_lost)
         return round(expected_value, 2)
+
+    def calculate_kelly_criterion(self, model_prob, decimal_odds, bankroll, fraction=0.25):
+        """
+        Phase 10: Advanced Bankroll Management
+        Calculates the mathematically optimal wager size using the Fractional Kelly Criterion.
+        f* = (bp - q) / b
+        where:
+        f* is the fraction of the current bankroll to wager.
+        b is the net fractional odds received on the wager (decimal_odds - 1).
+        p is the probability of winning (model_prob).
+        q is the probability of losing (1 - p).
+        
+        fraction=0.25 means we use a Quarter-Kelly strategy, which is the gold standard for sports 
+        betting to minimize variance intuitively and avoid catastrophic drawdowns.
+        """
+        if decimal_odds <= 1.0:
+            return 0.0
+            
+        b = decimal_odds - 1.0
+        p = model_prob
+        q = 1.0 - p
+        
+        kelly_fraction = (b * p - q) / b
+        
+        # If the expected value is negative, the Kelly formula outputs <= 0 (Do not bet)
+        if kelly_fraction <= 0:
+            return 0.0
+            
+        # Apply the fractional safety net (e.g. Quarter Kelly)
+        safe_fraction = kelly_fraction * fraction
+        
+        # Cap a singular max bet at 5% of bankroll to protect against statistical outliers
+        safe_fraction = min(safe_fraction, 0.05)
+        
+        return round(safe_fraction, 5)
