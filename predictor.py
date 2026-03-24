@@ -111,10 +111,12 @@ class ProfessionalNHLPredictor:
         
         if not games:
             print("No games scheduled.")
-            return
+            return []
 
         print(f"Found {len(games)} game(s). Generating predictions and +EV analysis...\n")
         print("="*60)
+        
+        results = []
 
         for game in games:
             home_team = game.get('homeTeam', {})
@@ -167,6 +169,18 @@ class ProfessionalNHLPredictor:
             else:
                 print(f"  Analysis         : NEGATIVE EV (${ev:.2f} per $100 bet) [SKIP] Skip")
             print("-" * 60)
+            
+            results.append({
+                'matchup': f"{away_abbrev} @ {home_abbrev}",
+                'predicted_winner': predicted_winner,
+                'confidence': f"{model_confidence*100:.1f}%",
+                'odds': suggested_odds,
+                'ev': ev,
+                'is_value': ev > 0,
+                'data_source': data_source
+            })
+            
+        return results
 
 if __name__ == "__main__":
     print("Welcome to the Pro NHL Predictor System")
