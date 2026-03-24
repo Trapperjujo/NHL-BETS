@@ -128,10 +128,6 @@ class FeatureEngine:
             'away_gf_pg': away_stats['gf_pg'],
             'home_ga_pg': home_stats['ga_pg'],
             'away_ga_pg': away_stats['ga_pg'],
-            'home_l10_win_pct': home_stats['l10_win_pct'],
-            'away_l10_win_pct': away_stats['l10_win_pct'],
-            'home_streak': home_stats['streak_momentum'],
-            'away_streak': away_stats['streak_momentum'],
             # New Advanced Features
             'home_pp_pct': home_stats['pp_pct'],
             'away_pp_pct': away_stats['pp_pct'],
@@ -147,8 +143,6 @@ class FeatureEngine:
             'away_xg_against_pg': away_stats['xg_against_pg'],
             'home_sv_pct': home_stats['sv_pct'],
             'away_sv_pct': away_stats['sv_pct'],
-            'home_is_b2b': home_stats['is_b2b'],
-            'away_is_b2b': away_stats['is_b2b'],
             
             # Phase 6 Ultra-Deep Metrics
             'home_cf_pct': home_stats['cf_pct'],

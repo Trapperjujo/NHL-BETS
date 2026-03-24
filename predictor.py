@@ -56,11 +56,10 @@ class ProfessionalNHLPredictor:
             
             X = df[[
                 'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
-                'home_ga_pg', 'away_ga_pg', 'home_l10_win_pct', 'away_l10_win_pct',
-                'home_streak', 'away_streak', 'home_pp_pct', 'away_pp_pct',
+                'home_ga_pg', 'away_ga_pg', 'home_pp_pct', 'away_pp_pct',
                 'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
                 'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
-                'home_sv_pct', 'away_sv_pct', 'home_is_b2b', 'away_is_b2b',
+                'home_sv_pct', 'away_sv_pct',
                 'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
                 'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
                 'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
@@ -69,6 +68,10 @@ class ProfessionalNHLPredictor:
                 'home_elo', 'away_elo'
             ]]
             y = df['home_win']
+            
+            from sklearn.calibration import CalibratedClassifierCV
+            # Wrap the XGBoost model in Isotonic Regression to map outputs to true probabilities
+            self.model = CalibratedClassifierCV(estimator=self.model, method='isotonic', cv=5)
             
             self.model.fit(X, y)
             self.is_trained = True
@@ -181,10 +184,14 @@ class ProfessionalNHLPredictor:
             away_team_data = game.get('awayTeam', {})
             start_time_utc = game.get('startTimeUTC', 'Unknown')
             
-            # Format the time (Basic string parsing since we know ISO format)
+            # Format the time to Winnipeg Central Time (America/Winnipeg)
             try:
-                dt = datetime.datetime.strptime(start_time_utc, "%Y-%m-%dT%H:%M:%SZ")
-                formatted_time = dt.strftime("%A, %b %d at %H:%M UTC")
+                import pytz
+                dt_utc = datetime.datetime.strptime(start_time_utc, "%Y-%m-%dT%H:%M:%SZ")
+                dt_utc = dt_utc.replace(tzinfo=pytz.UTC)
+                winnipeg_tz = pytz.timezone("America/Winnipeg")
+                dt_winnipeg = dt_utc.astimezone(winnipeg_tz)
+                formatted_time = dt_winnipeg.strftime("%A, %b %d at %I:%M %p CT")
             except:
                 formatted_time = start_time_utc
             
