@@ -293,6 +293,12 @@ class ProfessionalNHLPredictor:
             # Exact Score Prediction
             exact_home, exact_away = self.predict_exact_score(home_proj_goals, away_proj_goals)
 
+            # Moneyline Analysis parameters
+            predicted_winner_abbrev = home_abbrev if home_prob > away_prob else away_abbrev
+            model_confidence = max(home_prob, away_prob)
+            suggested_odds_ml = odds_data['home_odds'] if home_prob > away_prob else odds_data['away_odds']
+            ev_ml = ev_home if home_prob > away_prob else ev_away
+
             # Phase 10: Kelly Criterion Fractional Bet Sizing
             # (Passing 1 as dummy bankroll since it now returns a pure percentage)
             kelly_ml = self.odds.calculate_kelly_criterion(model_confidence, suggested_odds_ml, 1.0) if ev_ml > 0 else 0.0
@@ -301,12 +307,6 @@ class ProfessionalNHLPredictor:
 
             # 4. Display results
             print(f"MATCHUP: {away_abbrev} @ {home_abbrev} [{formatted_time}]")
-            
-            # Moneyline Analysis
-            predicted_winner_abbrev = home_abbrev if home_prob > away_prob else away_abbrev
-            model_confidence = max(home_prob, away_prob)
-            suggested_odds_ml = odds_data['home_odds'] if home_prob > away_prob else odds_data['away_odds']
-            ev_ml = ev_home if home_prob > away_prob else ev_away
             
             print(f"  Goalie Matchup   : {away_goalie} vs {home_goalie}")
             print(f"  Predicted Winner : {predicted_winner_abbrev} ({model_confidence*100:.1f}%)")
