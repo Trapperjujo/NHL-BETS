@@ -16,19 +16,25 @@ try:
     df['away_pp_pct'] = 20.0 + (df['away_gf_pg'] - 3.0) * 5.0
     df['home_pk_pct'] = 80.0 - (df['home_ga_pg'] - 3.0) * 5.0
     df['away_pk_pct'] = 80.0 - (df['away_ga_pg'] - 3.0) * 5.0
+    
+    # Phase 5: HDSV% Backfill
+    df['home_hdsv_pct'] = df['home_sv_pct'] - 0.080
+    df['away_hdsv_pct'] = df['away_sv_pct'] - 0.080
+    df['home_flight_fatigue'] = 1.0
+    df['away_flight_fatigue'] = 1.0
 
     X = df[[
         'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
         'home_ga_pg', 'away_ga_pg', 'home_pp_pct', 'away_pp_pct',
         'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
         'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
-        'home_sv_pct', 'away_sv_pct',
+        'home_sv_pct', 'away_sv_pct', 'home_hdsv_pct', 'away_hdsv_pct',
         'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
         'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
         'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
         'home_sva_xg_for', 'away_sva_xg_for', 'home_sva_xg_against', 'away_sva_xg_against',
         'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken',
-        'home_elo', 'away_elo'
+        'home_elo', 'away_elo', 'home_flight_fatigue', 'away_flight_fatigue'
     ]]
     y = df['home_win']
 except FileNotFoundError:

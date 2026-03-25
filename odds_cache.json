@@ -1,0 +1,155 @@
+{
+    "date": "2026-03-24",
+    "games": {
+        "TOR_BOS": {
+            "BOS": {
+                "opening_odds": 1.68,
+                "current_odds": 1.68
+            },
+            "TOR": {
+                "opening_odds": 2.11,
+                "current_odds": 2.11
+            }
+        },
+        "CAR_MTL": {
+            "MTL": {
+                "opening_odds": 2.08,
+                "current_odds": 2.08
+            },
+            "CAR": {
+                "opening_odds": 1.7,
+                "current_odds": 1.7
+            }
+        },
+        "OTT_DET": {
+            "DET": {
+                "opening_odds": 2.31,
+                "current_odds": 2.31
+            },
+            "OTT": {
+                "opening_odds": 1.58,
+                "current_odds": 1.58
+            }
+        },
+        "SEA_FLA": {
+            "FLA": {
+                "opening_odds": 1.5,
+                "current_odds": 1.5
+            },
+            "SEA": {
+                "opening_odds": 2.49,
+                "current_odds": 2.49
+            }
+        },
+        "CHI_NYI": {
+            "NYI": {
+                "opening_odds": 1.35,
+                "current_odds": 1.35
+            },
+            "CHI": {
+                "opening_odds": 3.08,
+                "current_odds": 3.08
+            }
+        },
+        "CBJ_PHI": {
+            "PHI": {
+                "opening_odds": 2.0,
+                "current_odds": 2.0
+            },
+            "CBJ": {
+                "opening_odds": 1.7599999999999998,
+                "current_odds": 1.7599999999999998
+            }
+        },
+        "COL_PIT": {
+            "PIT": {
+                "opening_odds": 34.0,
+                "current_odds": 34.0
+            },
+            "COL": {
+                "opening_odds": 1.01,
+                "current_odds": 1.01
+            }
+        },
+        "MIN_TBL": {
+            "TBL": {
+                "opening_odds": 1.833333333333333,
+                "current_odds": 1.833333333333333
+            },
+            "MIN": {
+                "opening_odds": 2.1999999999999997,
+                "current_odds": 2.1999999999999997
+            }
+        },
+        "WSH_STL": {
+            "STL": {
+                "opening_odds": 1.3804034582132565,
+                "current_odds": 1.3804034582132565
+            },
+            "WSH": {
+                "opening_odds": 3.6287878787878785,
+                "current_odds": 3.6287878787878785
+            }
+        },
+        "SJS_NSH": {
+            "NSH": {
+                "opening_odds": 1.01,
+                "current_odds": 1.01
+            },
+            "SJS": {
+                "opening_odds": 34.0,
+                "current_odds": 34.0
+            }
+        },
+        "NJD_DAL": {
+            "DAL": {
+                "opening_odds": 3.063380281690142,
+                "current_odds": 3.063380281690142
+            },
+            "NJD": {
+                "opening_odds": 1.484641638225256,
+                "current_odds": 1.484641638225256
+            }
+        },
+        "VGK_WPG": {
+            "WPG": {
+                "opening_odds": 1.1402831402831404,
+                "current_odds": 1.1402831402831404
+            },
+            "VGK": {
+                "opening_odds": 8.128440366972477,
+                "current_odds": 8.128440366972477
+            }
+        },
+        "LAK_CGY": {
+            "CGY": {
+                "opening_odds": 3.6641221374045796,
+                "current_odds": 3.6641221374045796
+            },
+            "LAK": {
+                "opening_odds": 1.3753581661891117,
+                "current_odds": 1.3753581661891117
+            }
+        },
+        "EDM_UTA": {
+            "UTA": {
+                "opening_odds": 1.4572368421052628,
+                "current_odds": 1.4572368421052628
+            },
+            "EDM": {
+                "opening_odds": 3.1870503597122295,
+                "current_odds": 3.1870503597122295
+            }
+        },
+        "ANA_VAN": {
+            "VAN": {
+                "opening_odds": 2.6666666666666665,
+                "current_odds": 2.6666666666666665
+            },
+            "ANA": {
+                "opening_odds": 1.6,
+                "current_odds": 1.6
+            }
+        }
+    }
+}

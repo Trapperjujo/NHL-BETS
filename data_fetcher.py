@@ -93,15 +93,21 @@ class NHLDataFetcher:
                     sv_pct = (goalie_row['ongoal'] - goalie_row['goals']) / (goalie_row['ongoal'] + 0.001)
                     gsax = goalie_row['xGoals'] - goalie_row['goals']
                     
+                    # Phase 5: High-Danger Save Percentage
+                    hd_shots = goalie_row.get('highDangerShots', 0)
+                    hd_goals = goalie_row.get('highDangerGoals', 0)
+                    hdsv_pct = (hd_shots - hd_goals) / hd_shots if hd_shots > 0 else 0.820
+                    
                     goalie_data[team] = {
                         'name': goalie_row['name'],
                         'status': starter['status'],
                         'sv_pct': sv_pct,
-                        'gsax': gsax
+                        'gsax': gsax,
+                        'hdsv_pct': hdsv_pct
                     }
                 else:
                     # Goalie not found (e.g., AHL call up)
-                    goalie_data[team] = {'name': name, 'status': starter['status'], 'sv_pct': None, 'gsax': None}
+                    goalie_data[team] = {'name': name, 'status': starter['status'], 'sv_pct': None, 'gsax': None, 'hdsv_pct': None}
                     
             print(f"Successfully scraped individual analytics for {len(goalie_data)} starting goalies.")
             return goalie_data
@@ -269,7 +275,7 @@ class NHLDataFetcher:
         5 days = 5+ days fully rested
         """
         import datetime
-        rest_days_dict = {team: 5 for team in team_abbrevs} # Default to 5+ days rested
+        rest_features = {team: {'rest_days': 5, 'last_city': 'HOME'} for team in team_abbrevs}
         
         import pytz
         tz = pytz.timezone("America/Winnipeg")
@@ -291,14 +297,16 @@ class NHLDataFetcher:
                                 away = game.get('awayTeam', {}).get('abbrev')
                                 
                                 # If the team played `days_ago` and we haven't tagged a more recent game yet
-                                if home in rest_days_dict and rest_days_dict[home] == 5:
-                                    rest_days_dict[home] = days_ago - 1
-                                if away in rest_days_dict and rest_days_dict[away] == 5:
-                                    rest_days_dict[away] = days_ago - 1
+                                if home in rest_features and rest_features[home]['rest_days'] == 5:
+                                    rest_features[home]['rest_days'] = days_ago - 1
+                                    rest_features[home]['last_city'] = home
+                                if away in rest_features and rest_features[away]['rest_days'] == 5:
+                                    rest_features[away]['rest_days'] = days_ago - 1
+                                    rest_features[away]['last_city'] = home
             except Exception as e:
                 pass
                 
-        return rest_days_dict
+        return rest_features
 
     def fetch_moneypuck_stats(self):
         """Fetches advanced xG and SV% metrics for all teams from MoneyPuck's daily CSV."""

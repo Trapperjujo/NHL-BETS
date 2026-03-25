@@ -6,22 +6,24 @@ from xgboost import XGBClassifier
 from data_fetcher import NHLDataFetcher
 from feature_engine import FeatureEngine
 from odds_integrator import OddsIntegrator
+from line_movement_tracker import LineMovementTracker
 
 class ProfessionalNHLPredictor:
     def __init__(self):
         self.fetcher = NHLDataFetcher()
         self.engine = FeatureEngine()
         self.odds = OddsIntegrator()
+        self.steam = LineMovementTracker()
         
-        # Phase 11 Mathematically optimal XGBoost parameters (Tuned via 50-cycle Optuna run)
+        # Phase 5 Ultimate Syndicate optimal XGBoost parameters (Tuned via 50-cycle Optuna run)
         self.model = XGBClassifier(
-            colsample_bytree=0.7995,
-            learning_rate=0.004095,
-            max_depth=4,
+            colsample_bytree=0.7238,
+            learning_rate=0.00141,
+            max_depth=3,
             min_child_weight=5,
-            n_estimators=300,
-            subsample=0.8970,
-            gamma=0.1564,
+            n_estimators=1000,
+            subsample=0.8183,
+            gamma=0.0129,
             eval_metric="logloss",
             random_state=42
         )
@@ -33,7 +35,7 @@ class ProfessionalNHLPredictor:
         and trains the predictive model on thousands of real game outcomes.
         """
         import joblib, os
-        model_path = "nhl_model_v3_optuna.pkl"
+        model_path = "nhl_model_v4_phase5.pkl"
         
         # Fast path: load a previously saved model from disk
         if os.path.exists(model_path):
@@ -55,18 +57,24 @@ class ProfessionalNHLPredictor:
             df['home_pk_pct'] = 80.0 - (df['home_ga_pg'] - 3.0) * 5.0
             df['away_pk_pct'] = 80.0 - (df['away_ga_pg'] - 3.0) * 5.0
             
+            # Phase 5: HDSV% and Flight Fatigue Backfill
+            df['home_hdsv_pct'] = df['home_sv_pct'] - 0.080
+            df['away_hdsv_pct'] = df['away_sv_pct'] - 0.080
+            df['home_flight_fatigue'] = 1.0
+            df['away_flight_fatigue'] = 1.0
+            
             X = df[[
                 'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
                 'home_ga_pg', 'away_ga_pg', 'home_pp_pct', 'away_pp_pct',
                 'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
                 'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
-                'home_sv_pct', 'away_sv_pct',
+                'home_sv_pct', 'away_sv_pct', 'home_hdsv_pct', 'away_hdsv_pct',
                 'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
                 'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
                 'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
                 'home_sva_xg_for', 'away_sva_xg_for', 'home_sva_xg_against', 'away_sva_xg_against',
                 'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken',
-                'home_elo', 'away_elo'
+                'home_elo', 'away_elo', 'home_flight_fatigue', 'away_flight_fatigue'
             ]]
             y = df['home_win']
             
@@ -218,19 +226,19 @@ class ProfessionalNHLPredictor:
             away_rest = matchup_features['away_rest_days'].values[0] if 'away_rest_days' in matchup_features.columns else 2
             
             # CRITICAL FIX: Ensure X_live exactly matches the model's expected features
-            # Define the exact 40 features used in training order
+            # Define the exact 44 features used in training order
             EXPECTED_FEATURES = [
                 'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
                 'home_ga_pg', 'away_ga_pg', 'home_pp_pct', 'away_pp_pct',
                 'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
                 'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
-                'home_sv_pct', 'away_sv_pct',
+                'home_sv_pct', 'away_sv_pct', 'home_hdsv_pct', 'away_hdsv_pct',
                 'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
                 'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
                 'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
                 'home_sva_xg_for', 'away_sva_xg_for', 'home_sva_xg_against', 'away_sva_xg_against',
                 'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken',
-                'home_elo', 'away_elo'
+                'home_elo', 'away_elo', 'home_flight_fatigue', 'away_flight_fatigue'
             ]
             
             # If the loaded model has feature names, align to them (handles stale models gracefully)
@@ -259,6 +267,23 @@ class ProfessionalNHLPredictor:
             # Fetch odds for moneyline and O/U
             odds_data = self.odds.fetch_live_odds(home_full_name, away_full_name, home_prob)
             
+            # Phase 5: Steam Tracking (Reverse Line Movement)
+            game_id = f"{away_abbrev}_{home_abbrev}"
+            # If Pinnacle is present, use it for Steam tracking, otherwise fallback to standard best odds
+            home_live_payout = odds_data.get('pin_true_home') or (1.0 / odds_data['home_odds'] if odds_data['home_odds'] > 0 else 0)
+            away_live_payout = odds_data.get('pin_true_away') or (1.0 / odds_data['away_odds'] if odds_data['away_odds'] > 0 else 0)
+            
+            # We must convert probability back to decimal odds for the tracker, OR tracker accepts decimal odds natively
+            # The tracker expects decimal odds format (e.g. 2.05). If we have true probability (like 0.55), odds = 1.0 / prob
+            home_steam_odds = 1.0 / home_live_payout if home_live_payout > 0 else 0
+            away_steam_odds = 1.0 / away_live_payout if away_live_payout > 0 else 0
+            
+            home_steam_data = self.steam.detect_steam(game_id, home_abbrev, home_steam_odds, public_bet_pct=0.45) # Mock public bet % for now
+            away_steam_data = self.steam.detect_steam(game_id, away_abbrev, away_steam_odds, public_bet_pct=0.45)
+            
+            odds_data['home_steam'] = home_steam_data
+            odds_data['away_steam'] = away_steam_data
+            
             # 3. Choose bet based on highest prob, calculate +EV
             pin_true_home = odds_data.get('pin_true_home')
             pin_true_away = odds_data.get('pin_true_away')
@@ -273,6 +298,7 @@ class ProfessionalNHLPredictor:
                 ev_home = self.odds.calculate_ev(home_prob, odds_data['home_odds'])
                 ev_away = self.odds.calculate_ev(away_prob, odds_data['away_odds'])
 
+
             
             # Poisson Over/Under Calculations
             # Phase 7 Upgrade: Opponent-adjusted goal projection
@@ -285,8 +311,20 @@ class ProfessionalNHLPredictor:
             away_xgf = matchup_features['away_xg_for_pg'].values[0]
             home_xga = matchup_features['home_xg_against_pg'].values[0]
             
-            home_proj_goals_base = ((home_xgf + away_xga) / 2) * HOME_ADVANTAGE
-            away_proj_goals_base = (away_xgf + home_xga) / 2
+            # Phase 5: High-Danger Goalie Math
+            # Calculate explicit matchup of High-Danger xG output vs the specific Goalie's HDSV%
+            home_hd_xg = matchup_features['home_hd_xg_for'].values[0] if 'home_hd_xg_for' in matchup_features.columns else 1.0
+            away_hd_xg = matchup_features['away_hd_xg_for'].values[0] if 'away_hd_xg_for' in matchup_features.columns else 1.0
+            home_goalie_hdsv = matchup_features['home_hdsv_pct'].values[0] if 'home_hdsv_pct' in matchup_features.columns else 0.820
+            away_goalie_hdsv = matchup_features['away_hdsv_pct'].values[0] if 'away_hdsv_pct' in matchup_features.columns else 0.820
+            
+            # If a goalie has 0.860 HDSV% (elite), they stop 4% more HD chances than the 0.820 average.
+            # We scale the opponent's HD xG output by this exact differential!
+            home_hd_advantage = (0.820 - away_goalie_hdsv) * home_hd_xg * 5.0 # Multiplier exposes the massive gravity of HD goals
+            away_hd_advantage = (0.820 - home_goalie_hdsv) * away_hd_xg * 5.0
+
+            home_proj_goals_base = (((home_xgf + home_hd_advantage) + away_xga) / 2) * HOME_ADVANTAGE
+            away_proj_goals_base = ((away_xgf + away_hd_advantage) + home_xga) / 2
             
             # Phase 10: Special Teams Disparity Engine
             # Calculate the explicit mathematical mismatch between PP and PK
@@ -360,6 +398,12 @@ class ProfessionalNHLPredictor:
             else:
                 print(f"  ML Analysis      : NEGATIVE EV (${ev_ml:.2f} per $100 bet) [SKIP] Skip")
 
+            # Steam Analysis
+            if odds_data.get('home_steam', {}).get('is_steam'):
+                print(f"  [STEAM ALERT]    : Sharp Reverse Line Movement detected on {home_abbrev} (+{odds_data['home_steam']['delta_prob']*100:.1f}%)")
+            if odds_data.get('away_steam', {}).get('is_steam'):
+                print(f"  [STEAM ALERT]    : Sharp Reverse Line Movement detected on {away_abbrev} (+{odds_data['away_steam']['delta_prob']*100:.1f}%)")
+
             # O/U Analysis
             print(f"  Projected Total  : {model_projected_total:.2f} (O/U Line: {odds_data['o_u_line']})")
             print(f"  Live O/U Odds    : Over {odds_data['o_u_line']} @ {odds_data['over_odds']} / Under {odds_data['o_u_line']} @ {odds_data['under_odds']}")
@@ -406,6 +450,10 @@ class ProfessionalNHLPredictor:
                 'home_st_disparity': home_st_disparity,
                 'away_st_disparity': away_st_disparity,
                 'home_rest_boost': home_rest_boost,
+                
+                # Phase 5 Steam Tracking
+                'home_steam': odds_data.get('home_steam', {}),
+                'away_steam': odds_data.get('away_steam', {}),
                 
                 'data_source': "Odds API" if odds_data.get('is_real_data') else "Mocked"
             })
