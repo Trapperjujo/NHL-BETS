@@ -13,14 +13,15 @@ class ProfessionalNHLPredictor:
         self.engine = FeatureEngine()
         self.odds = OddsIntegrator()
         
-        # Phase 6 mathematically optimal XGBoost parameters (from exhaustive 36-feature Grid Search)
+        # Phase 11 Mathematically optimal XGBoost parameters (Deep Trees + Regularization)
         self.model = XGBClassifier(
             colsample_bytree=0.8,
             learning_rate=0.01,
-            max_depth=3,
-            min_child_weight=5,
-            n_estimators=200,
-            subsample=1.0,
+            max_depth=5,
+            min_child_weight=3,
+            n_estimators=500,
+            subsample=0.9,
+            gamma=0.1,
             eval_metric="logloss",
             random_state=42
         )
@@ -70,8 +71,8 @@ class ProfessionalNHLPredictor:
             y = df['home_win']
             
             from sklearn.calibration import CalibratedClassifierCV
-            # Wrap the XGBoost model in Isotonic Regression to map outputs to true probabilities
-            self.model = CalibratedClassifierCV(estimator=self.model, method='isotonic', cv=5)
+            # Wrap the XGBoost model in Platt Sigmoid Scaling for smoother, wider confidence spreads
+            self.model = CalibratedClassifierCV(estimator=self.model, method='sigmoid', cv=5)
             
             self.model.fit(X, y)
             self.is_trained = True
