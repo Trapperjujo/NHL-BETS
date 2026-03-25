@@ -221,7 +221,11 @@ class NHLDataFetcher:
             
             # The API returns 'gameWeek' which is a list of days.
             # We want to find the games for today (or the next available day with games)
-            today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            # NHL API is timezone sensitive. The Streamlit cloud server runs in UTC,
+            # which rolls over to the next day 5 hours early! Let's lock it to Central Time.
+            import pytz
+            tz = pytz.timezone("America/Winnipeg")
+            today_str = datetime.datetime.now(tz).strftime("%Y-%m-%d")
             
             for day in data.get('gameWeek', []):
                 if day.get('date') == today_str:
@@ -250,7 +254,9 @@ class NHLDataFetcher:
         import datetime
         rest_days_dict = {team: 5 for team in team_abbrevs} # Default to 5+ days rested
         
-        today = datetime.datetime.now().date()
+        import pytz
+        tz = pytz.timezone("America/Winnipeg")
+        today = datetime.datetime.now(tz).date()
         
         # Look backward through the schedule API up to 4 days ago
         for days_ago in range(1, 5):
