@@ -186,7 +186,24 @@ class NHLDataFetcher:
                     player_row = team_df[team_df['name'].str.contains(missing_player.split()[-1], case=False, na=False)]
                     if not player_row.empty:
                         # take highest xg if multiple matches (e.g. players traded mid season)
-                        missing_xg_total += player_row['I_F_xGoals'].max()
+                        player_xg = player_row['I_F_xGoals'].max()
+                        
+                        # Apply TOI (Time on Ice) Scaling Factor
+                        # A missing 1st-liner (20+ minutes) destroys team structure, a 4th-liner is easily replaced.
+                        player_icetime = player_row['icetime'].max()
+                        player_games = player_row['games_played'].max()
+                        
+                        avg_toi_minutes = (player_icetime / (player_games if player_games > 0 else 1)) / 60.0
+                        
+                        toi_multiplier = 1.0
+                        if avg_toi_minutes >= 22.0:
+                            toi_multiplier = 1.6  # Elite #1 Defenseman or Superstar Forward (e.g., McDavid/Makar)
+                        elif avg_toi_minutes >= 18.0:
+                            toi_multiplier = 1.3  # Top 6 Forward / Top 4 D
+                        elif avg_toi_minutes <= 12.0:
+                            toi_multiplier = 0.4  # Fringey 4th-liner
+                            
+                        missing_xg_total += (player_xg * toi_multiplier)
                         
                 # Provide a cap (max 40%) so a team isn't penalized 100% just because of bad data matching or massive rebuilding
                 impact_pct = min(missing_xg_total / total_team_xg, 0.40) 

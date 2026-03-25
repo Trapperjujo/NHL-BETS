@@ -29,7 +29,7 @@ class OddsIntegrator:
     def _fetch_real_odds(self, api_key, home_team, away_team):
         try:
             if not self.real_odds_cache:
-                url = f"https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?regions=us&markets=h2h,totals&oddsFormat=decimal&apiKey={api_key}"
+                url = f"https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?bookmakers=pinnacle,draftkings,fanduel,betmgm&markets=h2h,totals&oddsFormat=decimal&apiKey={api_key}"
                 resp = requests.get(url)
                 resp.raise_for_status()
                 self.real_odds_cache = resp.json()
@@ -44,29 +44,44 @@ class OddsIntegrator:
                 # The Odds API uses full names (e.g., "Toronto Maple Leafs")
                 if home_clean in api_home_clean and away_clean in api_away_clean:
                     if game.get('bookmakers'):
-                        markets = game['bookmakers'][0]['markets']
+                        home_odds_list, away_odds_list = [], []
+                        over_odds_list, under_odds_list = [], []
+                        pinnacle_home, pinnacle_away = None, None
+                        o_u_line = 6.5
                         
-                        home_odds, away_odds = None, None
-                        over_odds, under_odds, o_u_line = None, None, 6.5
+                        for bm in game['bookmakers']:
+                            bm_key = bm['key']
+                            for m in bm['markets']:
+                                if m['key'] == 'h2h':
+                                    h_odd = next((o['price'] for o in m['outcomes'] if o['name'] == game['home_team']), None)
+                                    a_odd = next((o['price'] for o in m['outcomes'] if o['name'] == game['away_team']), None)
+                                    if h_odd: home_odds_list.append(h_odd)
+                                    if a_odd: away_odds_list.append(a_odd)
+                                    if bm_key == 'pinnacle':
+                                        pinnacle_home = h_odd
+                                        pinnacle_away = a_odd
+                                elif m['key'] == 'totals':
+                                    o_out = next((o for o in m['outcomes'] if o['name'] == 'Over'), None)
+                                    u_out = next((o for o in m['outcomes'] if o['name'] == 'Under'), None)
+                                    if o_out and u_out:
+                                        over_odds_list.append(o_out['price'])
+                                        under_odds_list.append(u_out['price'])
+                                        o_u_line = o_out.get('point', o_u_line)
                         
-                        for m in markets:
-                            if m['key'] == 'h2h':
-                                home_odds = next((o['price'] for o in m['outcomes'] if o['name'] == game['home_team']), None)
-                                away_odds = next((o['price'] for o in m['outcomes'] if o['name'] == game['away_team']), None)
-                            elif m['key'] == 'totals':
-                                # Totals outcomes are named 'Over' and 'Under'. They also provide 'point' (the line)
-                                over_outcome = next((o for o in m['outcomes'] if o['name'] == 'Over'), None)
-                                under_outcome = next((o for o in m['outcomes'] if o['name'] == 'Under'), None)
-                                if over_outcome and under_outcome:
-                                    over_odds = over_outcome['price']
-                                    under_odds = under_outcome['price']
-                                    o_u_line = over_outcome.get('point', 6.5)
-                        
+                        # Calculate pinnacle true probability if available
+                        pin_true_home, pin_true_away = None, None
+                        if pinnacle_home and pinnacle_away:
+                            margin = (1.0 / pinnacle_home) + (1.0 / pinnacle_away)
+                            pin_true_home = (1.0 / pinnacle_home) / margin
+                            pin_true_away = (1.0 / pinnacle_away) / margin
+
                         return {
-                            'home_odds': home_odds,
-                            'away_odds': away_odds,
-                            'over_odds': over_odds,
-                            'under_odds': under_odds,
+                            'home_odds': max(home_odds_list) if home_odds_list else None,
+                            'away_odds': max(away_odds_list) if away_odds_list else None,
+                            'over_odds': max(over_odds_list) if over_odds_list else None,
+                            'under_odds': max(under_odds_list) if under_odds_list else None,
+                            'pin_true_home': pin_true_home,
+                            'pin_true_away': pin_true_away,
                             'o_u_line': o_u_line,
                             'is_real_data': True
                         }

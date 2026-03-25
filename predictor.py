@@ -13,15 +13,15 @@ class ProfessionalNHLPredictor:
         self.engine = FeatureEngine()
         self.odds = OddsIntegrator()
         
-        # Phase 11 Mathematically optimal XGBoost parameters (Deep Trees + Regularization)
+        # Phase 11 Mathematically optimal XGBoost parameters (Tuned via 50-cycle Optuna run)
         self.model = XGBClassifier(
-            colsample_bytree=0.8,
-            learning_rate=0.01,
-            max_depth=5,
-            min_child_weight=3,
-            n_estimators=500,
-            subsample=0.9,
-            gamma=0.1,
+            colsample_bytree=0.7995,
+            learning_rate=0.004095,
+            max_depth=4,
+            min_child_weight=5,
+            n_estimators=300,
+            subsample=0.8970,
+            gamma=0.1564,
             eval_metric="logloss",
             random_state=42
         )
@@ -33,7 +33,7 @@ class ProfessionalNHLPredictor:
         and trains the predictive model on thousands of real game outcomes.
         """
         import joblib, os
-        model_path = "nhl_model_v2.pkl"
+        model_path = "nhl_model_v3_optuna.pkl"
         
         # Fast path: load a previously saved model from disk
         if os.path.exists(model_path):
@@ -260,9 +260,19 @@ class ProfessionalNHLPredictor:
             odds_data = self.odds.fetch_live_odds(home_full_name, away_full_name, home_prob)
             
             # 3. Choose bet based on highest prob, calculate +EV
-            # Moneyline EV
-            ev_home = self.odds.calculate_ev(home_prob, odds_data['home_odds'])
-            ev_away = self.odds.calculate_ev(away_prob, odds_data['away_odds'])
+            pin_true_home = odds_data.get('pin_true_home')
+            pin_true_away = odds_data.get('pin_true_away')
+            
+            # Moneyline EV (Top-Down if Pinnacle is present, Bottom-Up otherwise)
+            if pin_true_home is not None and pin_true_away is not None:
+                ev_home = self.odds.calculate_ev(pin_true_home, odds_data['home_odds'])
+                ev_away = self.odds.calculate_ev(pin_true_away, odds_data['away_odds'])
+                home_prob = pin_true_home
+                away_prob = pin_true_away
+            else:
+                ev_home = self.odds.calculate_ev(home_prob, odds_data['home_odds'])
+                ev_away = self.odds.calculate_ev(away_prob, odds_data['away_odds'])
+
             
             # Poisson Over/Under Calculations
             # Phase 7 Upgrade: Opponent-adjusted goal projection

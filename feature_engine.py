@@ -57,6 +57,16 @@ class FeatureEngine:
             is_b2b = 1 if rest_days == 0 else 0
 
             # Feature Engineering Merge
+            
+            # Phase 2 Upgrade: L10 Rolling Averages for Advanced Metrics
+            # Mathematically derive L10 momentum from L10 win% and active Streak.
+            # A team with 8 wins in L10 (0.800) is surging compared to a 0.500 baseline, 
+            # effectively boosting their Expected Goals and High-Danger generation recently.
+            l10_win_pct = l10_wins / 10.0
+            momentum_factor = 1.0 + (l10_win_pct - 0.5) * 0.30 + (streak_momentum * 0.02)
+            # Cap the momentum swing between 0.70x (freefall) and 1.30x (unstoppable)
+            momentum_factor = max(0.70, min(1.30, momentum_factor))
+            
             team_stats = {
                 'team_id': team_id,
                 'team_name': full_name,
@@ -64,40 +74,37 @@ class FeatureEngine:
                 'gf_pg': goals_for / games_played if games_played > 0 else 0,
                 'ga_pg': goals_against / games_played if games_played > 0 else 0,
                 'goal_diff_pg': (goals_for - goals_against) / games_played if games_played > 0 else 0,
-                'l10_win_pct': l10_wins / 10.0,
+                'l10_win_pct': l10_win_pct,
                 'streak_momentum': streak_momentum,
                 # Advanced stats
-                'pp_pct': adv_data.get('powerPlayPct', 0.20), # fallback average 20%
-                'pk_pct': adv_data.get('penaltyKillPct', 0.80), # fallback average 80%
-                'faceoff_pct': adv_data.get('faceoffWinPct', 0.50), # fallback average 50%
+                'pp_pct': adv_data.get('powerPlayPct', 0.20),
+                'pk_pct': adv_data.get('penaltyKillPct', 0.80),
+                'faceoff_pct': adv_data.get('faceoffWinPct', 0.50),
                 'shots_for_pg': adv_data.get('shotsForPerGame', 30.0),
                 'shots_against_pg': adv_data.get('shotsAgainstPerGame', 30.0),
                 
-                # Phase 9: Injury Tracking Penalty
-                # Reduce the team's historical Expected Goals by the exact mathematical % missing due to scratched players
-                'xg_for_pg': mp_data.get('xg_for_pg', 3.0) * (1.0 - injury_impacts.get(team_id, 0.0)),
+                # Phase 9: Injury Tracking Penalty + Phase 2 L10 Momentum
+                'xg_for_pg': (mp_data.get('xg_for_pg', 3.0) * momentum_factor) * (1.0 - injury_impacts.get(team_id, 0.0)),
                 'injury_penalty_pct': injury_impacts.get(team_id, 0.0),
                 
-                'xg_against_pg': mp_data.get('xg_against_pg', 3.0),
+                'xg_against_pg': mp_data.get('xg_against_pg', 3.0) / momentum_factor,
                 
                 # Phase 9: Individual Goalie Override
-                # If we scraped a confirmed starter, use their specific SV% instead of the team's rolling average.
-                # This explicitly punishes a team resting their starter, or rewards an elite Vezina goalie.
                 'sv_pct': starting_goalies.get(team_id, {}).get('sv_pct') or mp_data.get('sv_pct', 0.900),
                 'starting_goalie': starting_goalies.get(team_id, {}).get('name', 'Team Average'),
                 
                 'is_b2b': is_b2b,
                 'rest_days': rest_days,
                 
-                # New Phase 6 Ultra-Deep Metrics
-                'cf_pct': mp_data.get('cf_pct', 0.5),
-                'ff_pct': mp_data.get('ff_pct', 0.5),
-                'hd_shots_for': mp_data.get('hd_shots_for', 5.0),
-                'hd_shots_against': mp_data.get('hd_shots_against', 5.0),
-                'hd_xg_for': mp_data.get('hd_xg_for', 1.0),
-                'hd_xg_against': mp_data.get('hd_xg_against', 1.0),
-                'sva_xg_for': mp_data.get('sva_xg_for', 3.0),
-                'sva_xg_against': mp_data.get('sva_xg_against', 3.0),
+                # Phase 6 Ultra-Deep Metrics (Scaled by hitting L10 sliding window)
+                'cf_pct': mp_data.get('cf_pct', 0.5) * momentum_factor,
+                'ff_pct': mp_data.get('ff_pct', 0.5) * momentum_factor,
+                'hd_shots_for': mp_data.get('hd_shots_for', 5.0) * momentum_factor,
+                'hd_shots_against': mp_data.get('hd_shots_against', 5.0) / momentum_factor,
+                'hd_xg_for': mp_data.get('hd_xg_for', 1.0) * momentum_factor,
+                'hd_xg_against': mp_data.get('hd_xg_against', 1.0) / momentum_factor,
+                'sva_xg_for': mp_data.get('sva_xg_for', 3.0) * momentum_factor,
+                'sva_xg_against': mp_data.get('sva_xg_against', 3.0) / momentum_factor,
                 'pen_drawn': mp_data.get('pen_drawn', 3.0),
                 'pen_taken': mp_data.get('pen_taken', 3.0),
                 # Phase 8: Live Elo estimate (derived from season win percentage)

@@ -1,17 +1,14 @@
 import pandas as pd
+import optuna
 from xgboost import XGBClassifier
-from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import log_loss, accuracy_score
 import time
 
-def optimize_xgboost():
-    print("Loading historical training data (~6,700 games)...")
-    try:
-        df = pd.read_csv("historical_training_data.csv")
-    except FileNotFoundError:
-        print("ERROR: historical_training_data.csv not found!")
-        return
-
+print("Loading historical training data (~6,700 games)...")
+try:
+    df = pd.read_csv("historical_training_data.csv")
+    
     # Engineer the missing basic metrics for historic data alignment
     df['home_streak'] = 0 
     df['away_streak'] = 0
@@ -22,66 +19,73 @@ def optimize_xgboost():
 
     X = df[[
         'home_win_pct', 'away_win_pct', 'home_gf_pg', 'away_gf_pg',
-        'home_ga_pg', 'away_ga_pg', 'home_l10_win_pct', 'away_l10_win_pct',
-        'home_streak', 'away_streak', 'home_pp_pct', 'away_pp_pct',
+        'home_ga_pg', 'away_ga_pg', 'home_pp_pct', 'away_pp_pct',
         'home_pk_pct', 'away_pk_pct', 'home_shots_diff', 'away_shots_diff',
         'home_xg_for_pg', 'away_xg_for_pg', 'home_xg_against_pg', 'away_xg_against_pg',
-        'home_sv_pct', 'away_sv_pct', 'home_is_b2b', 'away_is_b2b',
+        'home_sv_pct', 'away_sv_pct',
         'home_cf_pct', 'away_cf_pct', 'home_ff_pct', 'away_ff_pct',
         'home_hd_shots_for', 'away_hd_shots_for', 'home_hd_shots_against', 'away_hd_shots_against',
         'home_hd_xg_for', 'away_hd_xg_for', 'home_hd_xg_against', 'away_hd_xg_against',
         'home_sva_xg_for', 'away_sva_xg_for', 'home_sva_xg_against', 'away_sva_xg_against',
-        'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken'
+        'home_pen_drawn', 'away_pen_drawn', 'home_pen_taken', 'away_pen_taken',
+        'home_elo', 'away_elo'
     ]]
     y = df['home_win']
+except FileNotFoundError:
+    print("ERROR: historical_training_data.csv not found!")
+    X, y = None, None
 
-    # Define the parameter grid to test
-    # This combination represents dozens of simulated seasons
-    param_grid = {
-        'n_estimators': [100, 200, 300, 500],
-        'learning_rate': [0.01, 0.05, 0.1],
-        'max_depth': [3, 4, 5, 6],
-        'min_child_weight': [1, 3, 5],
-        'subsample': [0.8, 1.0],
-        'colsample_bytree': [0.8, 1.0]
+def objective(trial):
+    # Suggest hyperparameters using Optuna's intelligent search space
+    param = {
+        'n_estimators': trial.suggest_int('n_estimators', 100, 1000, step=100),
+        'learning_rate': trial.suggest_float('learning_rate', 0.001, 0.1, log=True),
+        'max_depth': trial.suggest_int('max_depth', 3, 9),
+        'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
+        'gamma': trial.suggest_float('gamma', 0.01, 1.0, log=True),
+        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+        'eval_metric': 'logloss',
+        'random_state': 42
     }
-
-    xgb = XGBClassifier(eval_metric='logloss', random_state=42)
-
-    # TimeSeriesSplit is crucial for sports so we don't leak future games into past tests
-    print("Initializing Grid Search over 500+ parameter combinations...")
-    print("This requires heavy computing power and may take several minutes.")
     
     cv = TimeSeriesSplit(n_splits=3)
+    loglosses = []
     
-    grid_search = GridSearchCV(
-        estimator=xgb, 
-        param_grid=param_grid, 
-        scoring='neg_log_loss', 
-        cv=cv, 
-        verbose=1, 
-        n_jobs=-1
-    )
+    for train_idx, val_idx in cv.split(X):
+        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+        
+        model = XGBClassifier(**param)
+        model.fit(X_train, y_train)
+        
+        preds = model.predict_proba(X_val)
+        ll = log_loss(y_val, preds)
+        loglosses.append(ll)
+        
+    return sum(loglosses) / len(loglosses)
 
+def optimize_xgboost():
+    if X is None:
+        return
+        
+    print("Initializing Optuna Hyperparameter Automation...")
+    print("This will mathematically hunt for the absolute BEST architecture over multiple trials.")
+    
+    # Run 50 trials for an intensive live session search
+    study = optuna.create_study(direction='minimize')
     start_time = time.time()
-    grid_search.fit(X, y)
+    study.optimize(objective, n_trials=50)
     end_time = time.time()
 
     print("\n" + "="*50)
-    print("OPTIMIZATION COMPLETE!")
+    print("OPTUNA OPTIMIZATION COMPLETE!")
     print(f"Time Taken: {(end_time - start_time) / 60:.2f} minutes")
     print("="*50)
-    print(f"Best Parameters Found:\n{grid_search.best_params_}")
+    print(f"Best Multi-Season Log-Loss: {study.best_value:.4f}")
+    print(f"\nAbsolute Best Parameters Found:\n{study.best_params}")
     
-    best_logloss = -grid_search.best_score_
-    print(f"\nBest Cross-Validated Log-Loss: {best_logloss:.4f}")
-    
-    # Calculate accuracy with best params
-    best_model = grid_search.best_estimator_
-    y_pred = best_model.predict(X)
-    acc = accuracy_score(y, y_pred)
-    print(f"Historical Win/Loss Accuracy (of Best Model): {acc*100:.2f}%\n")
-    print("ACTION REQUIRED: Update predictor.py with these new parameters!")
+    print("\nACTION REQUIRED: Copy these parameters into the XGBClassifier inside predictor.py!")
 
 if __name__ == "__main__":
     optimize_xgboost()
