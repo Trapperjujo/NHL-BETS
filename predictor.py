@@ -109,6 +109,35 @@ class ProfessionalNHLPredictor:
         prob_over = 1.0 - prob_under
         return prob_over, prob_under
 
+    def calculate_poisson_spread(self, home_xg, away_xg, home_spread_line):
+        """
+        Calculates the exact mathematical probability of covering a Puck Line Spread.
+        Iterates through dual Poisson distributions to find the margin of victory.
+        """
+        import math
+        prob_home_cover = 0.0
+        prob_total_valid = 0.0
+        
+        for h in range(15):
+            for a in range(15):
+                if h == a: continue # NHL games don't tie
+                
+                prob_h = (math.exp(-home_xg) * (home_xg ** h)) / math.factorial(h)
+                prob_a = (math.exp(-away_xg) * (away_xg ** a)) / math.factorial(a)
+                prob_score = prob_h * prob_a
+                
+                prob_total_valid += prob_score
+                
+                if (h - a) > home_spread_line:
+                    prob_home_cover += prob_score
+                    
+        # Normalize to exclude ties (since we don't count h==a)
+        if prob_total_valid > 0:
+            prob_home_cover = prob_home_cover / prob_total_valid
+            
+        prob_away_cover = 1.0 - prob_home_cover
+        return prob_home_cover, prob_away_cover
+
     def predict_exact_score(self, home_xg, away_xg):
         """
         Calculates the most mathematically probable exact final score.
@@ -371,6 +400,12 @@ class ProfessionalNHLPredictor:
             ev_over = self.odds.calculate_ev(prob_over, odds_data['over_odds']) if odds_data.get('over_odds') else 0
             ev_under = self.odds.calculate_ev(prob_under, odds_data['under_odds']) if odds_data.get('under_odds') else 0
             
+            # Phase 6 Spreads Calculations
+            prob_home_cover, prob_away_cover = self.calculate_poisson_spread(home_proj_goals, away_proj_goals, odds_data['home_spread_line'])
+            
+            ev_home_spread = self.odds.calculate_ev(prob_home_cover, odds_data['home_spread_odds']) if odds_data.get('home_spread_odds') else 0
+            ev_away_spread = self.odds.calculate_ev(prob_away_cover, odds_data['away_spread_odds']) if odds_data.get('away_spread_odds') else 0
+            
             # Exact Score Prediction
             exact_home, exact_away = self.predict_exact_score(home_proj_goals, away_proj_goals)
 
@@ -385,6 +420,9 @@ class ProfessionalNHLPredictor:
             kelly_ml = self.odds.calculate_kelly_criterion(model_confidence, suggested_odds_ml, 1.0) if ev_ml > 0 else 0.0
             kelly_over = self.odds.calculate_kelly_criterion(prob_over, odds_data['over_odds'], 1.0) if ev_over > 0 else 0.0
             kelly_under = self.odds.calculate_kelly_criterion(prob_under, odds_data['under_odds'], 1.0) if ev_under > 0 else 0.0
+            
+            kelly_home_spread = self.odds.calculate_kelly_criterion(prob_home_cover, odds_data['home_spread_odds'], 1.0) if ev_home_spread > 0 else 0.0
+            kelly_away_spread = self.odds.calculate_kelly_criterion(prob_away_cover, odds_data['away_spread_odds'], 1.0) if ev_away_spread > 0 else 0.0
 
             # 4. Display results
             print(f"MATCHUP: {away_abbrev} @ {home_abbrev} [{formatted_time}]")
@@ -434,6 +472,16 @@ class ProfessionalNHLPredictor:
                 'under_odds': odds_data.get('under_odds', 1.90),
                 'ev_over': ev_over,
                 'ev_under': ev_under,
+                
+                # Phase 6 Spreads
+                'home_spread_line': odds_data.get('home_spread_line', -1.5),
+                'away_spread_line': odds_data.get('away_spread_line', 1.5),
+                'home_spread_odds': odds_data.get('home_spread_odds', 2.5),
+                'away_spread_odds': odds_data.get('away_spread_odds', 1.5),
+                'ev_home_spread': ev_home_spread,
+                'ev_away_spread': ev_away_spread,
+                'kelly_home_spread': locals().get('kelly_home_spread', 0),
+                'kelly_away_spread': locals().get('kelly_away_spread', 0),
                 
                 # Phase 9 Goalies & Injuries
                 'home_goalie': home_goalie,

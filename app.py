@@ -138,6 +138,32 @@ else:
             else:
                 st.warning(f"📉 **No O/U Edge.** (Over EV: ${ev_over:.2f} | Under EV: ${ev_under:.2f}). Skip.")
 
+            # Puck Line / Spreads
+            st.markdown("##### Puck Line (Spreads)")
+            col7, col8, col9 = st.columns(3)
+            
+            ev_home_spread = res.get('ev_home_spread', 0)
+            ev_away_spread = res.get('ev_away_spread', 0)
+            
+            with col7:
+                st.metric("Home Spread", f"{res.get('home_spread_line', '-1.5')} ({res.get('home_spread_odds', 'N/A')})")
+            with col8:
+                st.metric("Away Spread", f"{res.get('away_spread_line', '+1.5')} ({res.get('away_spread_odds', 'N/A')})")
+            with col9:
+                if ev_home_spread > ev_away_spread:
+                    st.metric("Best Spread EV", f"+${ev_home_spread:.2f}" if ev_home_spread > 0 else f"${ev_home_spread:.2f}")
+                else:
+                    st.metric("Best Spread EV", f"+${ev_away_spread:.2f}" if ev_away_spread > 0 else f"${ev_away_spread:.2f}")
+            
+            if ev_home_spread > 0:
+                rec_wager = user_bankroll * res.get('kelly_home_spread', 0)
+                st.success(f"📈 **HOME SPREAD Value Bet!** EV: +${ev_home_spread:.2f}  |  💰 **Rec. Wager:** ${rec_wager:.2f}")
+            elif ev_away_spread > 0:
+                rec_wager = user_bankroll * res.get('kelly_away_spread', 0)
+                st.success(f"📈 **AWAY SPREAD Value Bet!** EV: +${ev_away_spread:.2f}  |  💰 **Rec. Wager:** ${rec_wager:.2f}")
+            else:
+                st.warning(f"📉 **No Spread Edge.** (Home EV: ${ev_home_spread:.2f} | Away EV: ${ev_away_spread:.2f}). Skip.")
+
             st.divider()
 
     # ---- Full Summary Table ----
@@ -155,6 +181,7 @@ else:
             "Proj. Goals": res.get('projected_total', 'N/A'),
             "Over EV ($)": round(res.get('ev_over', 0), 2),
             "Under EV ($)": round(res.get('ev_under', 0), 2),
+            "Spread EV ($)": round(max(res.get('ev_home_spread', 0), res.get('ev_away_spread', 0)), 2)
         })
     summary_df = pd.DataFrame(table_rows)
 
@@ -166,7 +193,7 @@ else:
             return ''
 
     st.dataframe(
-        summary_df.style.applymap(highlight_ev, subset=['ML EV ($)', 'Over EV ($)', 'Under EV ($)']),
+        summary_df.style.applymap(highlight_ev, subset=['ML EV ($)', 'Over EV ($)', 'Under EV ($)', 'Spread EV ($)']),
         use_container_width=True
     )
 

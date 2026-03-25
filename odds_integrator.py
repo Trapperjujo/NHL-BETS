@@ -29,7 +29,7 @@ class OddsIntegrator:
     def _fetch_real_odds(self, api_key, home_team, away_team):
         try:
             if not self.real_odds_cache:
-                url = f"https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?bookmakers=pinnacle,draftkings,fanduel,betmgm&markets=h2h,totals&oddsFormat=decimal&apiKey={api_key}"
+                url = f"https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/?bookmakers=pinnacle,draftkings,fanduel,betmgm&markets=h2h,totals,spreads&oddsFormat=decimal&apiKey={api_key}"
                 resp = requests.get(url)
                 resp.raise_for_status()
                 self.real_odds_cache = resp.json()
@@ -67,6 +67,16 @@ class OddsIntegrator:
                                         over_odds_list.append(o_out['price'])
                                         under_odds_list.append(u_out['price'])
                                         o_u_line = o_out.get('point', o_u_line)
+                                elif m['key'] == 'spreads':
+                                    h_spread = next((o for o in m['outcomes'] if o['name'] == game['home_team']), None)
+                                    a_spread = next((o for o in m['outcomes'] if o['name'] == game['away_team']), None)
+                                    if h_spread and a_spread:
+                                        # Use the first bookmaker's spread logic (DraftKings usually sets -1.5)
+                                        if 'home_spread_odds' not in locals():
+                                            home_spread_odds = h_spread['price']
+                                            away_spread_odds = a_spread['price']
+                                            home_spread_line = h_spread.get('point', -1.5)
+                                            away_spread_line = a_spread.get('point', 1.5)
                         
                         # Calculate pinnacle true probability if available
                         pin_true_home, pin_true_away = None, None
@@ -83,6 +93,10 @@ class OddsIntegrator:
                             'pin_true_home': pin_true_home,
                             'pin_true_away': pin_true_away,
                             'o_u_line': o_u_line,
+                            'home_spread_odds': locals().get('home_spread_odds', 2.50),
+                            'away_spread_odds': locals().get('away_spread_odds', 1.50),
+                            'home_spread_line': locals().get('home_spread_line', -1.5),
+                            'away_spread_line': locals().get('away_spread_line', 1.5),
                             'is_real_data': True
                         }
         except Exception as e:
@@ -121,6 +135,10 @@ class OddsIntegrator:
             'over_odds': over_odds,
             'under_odds': under_odds,
             'o_u_line': o_u_line,
+            'home_spread_odds': 2.65 if home_team_win_prob_estimate < 0.50 else 1.45,
+            'away_spread_odds': 1.45 if home_team_win_prob_estimate < 0.50 else 2.65,
+            'home_spread_line': 1.5 if home_team_win_prob_estimate < 0.50 else -1.5,
+            'away_spread_line': -1.5 if home_team_win_prob_estimate < 0.50 else 1.5,
             'is_real_data': False
         }
 
