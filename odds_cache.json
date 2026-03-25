@@ -84,11 +84,11 @@
         "WSH_STL": {
             "STL": {
                 "opening_odds": 1.3804034582132565,
-                "current_odds": 1.3804034582132565
+                "current_odds": 1.1661721068249258
             },
             "WSH": {
                 "opening_odds": 3.6287878787878785,
-                "current_odds": 3.6287878787878785
+                "current_odds": 7.017857142857143
             }
         },
         "SJS_NSH": {
@@ -98,17 +98,17 @@
             },
             "SJS": {
                 "opening_odds": 34.0,
-                "current_odds": 41.0
+                "current_odds": 34.0
             }
         },
         "NJD_DAL": {
             "DAL": {
                 "opening_odds": 3.063380281690142,
-                "current_odds": 9.906542056074764
+                "current_odds": 7.8999999999999995
             },
             "NJD": {
                 "opening_odds": 1.484641638225256,
-                "current_odds": 1.1122770199370409
+                "current_odds": 1.1449275362318843
             }
         },
         "VGK_WPG": {
@@ -124,31 +124,31 @@
         "LAK_CGY": {
             "CGY": {
                 "opening_odds": 3.6641221374045796,
-                "current_odds": 3.868217054263566
+                "current_odds": 2.2126436781609193
             },
             "LAK": {
                 "opening_odds": 1.3753581661891117,
-                "current_odds": 1.3486486486486486
+                "current_odds": 1.8246445497630333
             }
         },
         "EDM_UTA": {
             "UTA": {
                 "opening_odds": 1.4572368421052628,
-                "current_odds": 1.843601895734597
+                "current_odds": 1.8564593301435408
             },
             "EDM": {
                 "opening_odds": 3.1870503597122295,
-                "current_odds": 2.1853932584269664
+                "current_odds": 2.167597765363128
             }
         },
         "ANA_VAN": {
             "VAN": {
                 "opening_odds": 2.6666666666666665,
-                "current_odds": 2.5031446540880498
+                "current_odds": 1.9195979899497486
             },
             "ANA": {
                 "opening_odds": 1.6,
-                "current_odds": 1.6652719665271964
+                "current_odds": 2.087431693989071
             }
         }
     }

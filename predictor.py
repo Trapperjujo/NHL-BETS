@@ -296,6 +296,11 @@ class ProfessionalNHLPredictor:
             # Fetch odds for moneyline and O/U
             odds_data = self.odds.fetch_live_odds(home_full_name, away_full_name, home_prob)
             
+            # Enforce strict real-time API odds; skip generating mocked odds for games
+            if not odds_data or not odds_data.get('is_real_data'):
+                print(f"Skipping {away_abbrev} @ {home_abbrev} - No active odds on The Odds API.")
+                continue
+            
             # Phase 5: Steam Tracking (Reverse Line Movement)
             game_id = f"{away_abbrev}_{home_abbrev}"
             # If Pinnacle is present, use it for Steam tracking, otherwise fallback to standard best odds
