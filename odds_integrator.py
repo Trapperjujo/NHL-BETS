@@ -115,6 +115,9 @@ class OddsIntegrator:
         Formula: (Probability of Winning x Amount Won per Bet) - (Probability of Losing x Amount Lost)
         Amount Won = 100 * (Odds - 1)
         """
+        if decimal_odds is None:
+            return 0.0
+
         prob_win = model_prob
         prob_lose = 1.0 - prob_win
         
